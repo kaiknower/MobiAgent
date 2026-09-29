@@ -1,0 +1,88 @@
+{
+  "skills": {
+    "close": {
+      "base_params": "/path/to/pi05_base/params",
+      "norm_path": "/path/to/norm/close/norm_stats.json",
+      "batch_size": 8,
+      "action_horizon": 50,
+      "use_quantile_norm": false,
+      "dataset_weights": null,
+      "data_dirs": [
+        {
+          "path": "/path/to/robocasa/close",
+          "filter_key": null
+        }
+      ]
+    },
+    "open": {
+      "base_params": "/path/to/pi05_base/params",
+      "norm_path": "/path/to/norm/open/norm_stats.json",
+      "batch_size": 8,
+      "action_horizon": 50,
+      "use_quantile_norm": false,
+      "dataset_weights": null,
+      "data_dirs": [
+        {
+          "path": "/path/to/robocasa/open",
+          "filter_key": null
+        }
+      ]
+    },
+    "switch": {
+      "base_params": "/path/to/pi05_base/params",
+      "norm_path": "/path/to/norm/switch/norm_stats.json",
+      "batch_size": 8,
+      "action_horizon": 50,
+      "use_quantile_norm": false,
+      "dataset_weights": null,
+      "data_dirs": [
+        {
+          "path": "/path/to/robocasa/switch",
+          "filter_key": null
+        }
+      ]
+    },
+    "manipulate": {
+      "base_params": "/path/to/pi05_base/params",
+      "norm_path": "/path/to/norm/manipulate/norm_stats.json",
+      "batch_size": 8,
+      "action_horizon": 50,
+      "use_quantile_norm": false,
+      "dataset_weights": null,
+      "data_dirs": [
+        {
+          "path": "/path/to/robocasa/manipulate",
+          "filter_key": null
+        }
+      ]
+    },
+    "navigate": {
+      "base_params": "/path/to/pi05_base/params",
+      "norm_path": "/path/to/norm/navigate/norm_stats.json",
+      "batch_size": 8,
+      "action_horizon": 50,
+      "use_quantile_norm": false,
+      "dataset_weights": null,
+      "data_dirs": [
+        {
+          "path": "/path/to/robocasa/navigate",
+          "filter_key": null
+        }
+      ]
+    },
+    "pnp": {
+      "base_params": "/path/to/pi05_base/params",
+      "norm_path": "/path/to/norm/pnp/norm_stats.json",
+      "batch_size": 8,
+      "action_horizon": 50,
+      "use_quantile_norm": false,
+      "dataset_weights": null,
+      "data_dirs": [
+        {
+          "path": "/path/to/robocasa/pnp",
+          "filter_key": null
+        }
+      ]
+    }
+  }
+}

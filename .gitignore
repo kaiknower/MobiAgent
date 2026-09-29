@@ -1,0 +1,42 @@
+# Credentials and machine-local settings
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+configs/policy_servers.yaml
+configs/task_instructions.json
+configs/robocasa_data.json
+# External data, weights, logs, and generated artifacts
+/data/
+/datasets/
+/checkpoints/
+/outputs/
+/runs/
+/logs/
+/results/
+**/wandb/
+**/.cache/
+**/checkpoints/
+**/assets/norm_stats.json
+*.log
+*.jsonl
+*.parquet
+*.npz
+*.npy
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.mp4
+*.avi
+# Development products
+.venv/
+**/__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+.DS_Store
