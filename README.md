@@ -15,15 +15,12 @@
 
 [![Project Overview](https://img.shields.io/badge/Project-Overview-3366cc?style=plastic&logo=googlechrome&logoColor=white)](docs/overview.md)
 [![Paper: Coming soon](https://img.shields.io/badge/Paper-Coming_soon-b31b1b?style=plastic&logo=arxiv&logoColor=white)](#paper)
-[![Status](https://img.shields.io/badge/Status-Private_Preview-555555?style=plastic&logo=github&logoColor=white)](docs/release-scope.md)
 
 <img src="docs/assets/framework.png" alt="MobiAgent dual-loop architecture: deployment through planning, skill execution and reflection, and offline policy evolution through skill discovery and training" width="100%">
 
 </div>
 
 MobiAgent connects a deployment loop of **planning, skill execution, and visual reflection** with an offline loop of **demonstration processing, skill discovery, and policy training**. A shared vision-language backbone supports multiple flow-matching action experts.
-
-This repository is a **private code preview**. It contains curated source code and documentation, with no experiment results, logs, datasets, trained weights, or credentials. The cleaned runtime and portable recipes are not a claim of exact reproduction of the paper's reported experiments. See [release scope and validation](docs/release-scope.md).
 
 ## Paper
 
@@ -88,9 +85,3 @@ lists supported settings; it is a template, not automatically loaded.
 ## Citation
 
 Citation details will be added here when the final reference is available.
-
-## License and release status
-
-First-party code remains a private research preview; no public open-source license
-has been selected yet. Third-party license notices are retained under
-[`policy/openpi/`](policy/openpi/) and summarized in [NOTICE.md](NOTICE.md).

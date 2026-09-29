@@ -9,4 +9,3 @@ training and WebSocket serving for BEHAVIOR and RoboCasa simulation.
 - [`src/openpi/serving/`](src/openpi/serving/): shared policy server
 
 The upstream Apache-2.0 license and Gemma notice are retained in this directory.
-Historical experiment configurations and generated assets are excluded.

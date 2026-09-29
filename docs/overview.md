@@ -13,6 +13,3 @@ The code is organized around those interfaces rather than individual experiments
 BEHAVIOR and RoboCasa use simulator adapters. The RoboCasa training and inference
 entrypoints are grouped under `scripts/robocasa/`; shared implementations stay in
 `src/mobiagent/` and `policy/openpi/`.
-
-The project webpage, paper link, datasets, weights, and public release are not
-published by this repository. Public links can be added to the README when ready.

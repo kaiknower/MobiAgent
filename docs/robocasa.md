@@ -80,13 +80,12 @@ it does not override the visual critic's decision.
 ## Training
 
 The shared VLM and all six action experts are trained jointly. The VLM is not
-frozen (`freeze_filter=nnx.Nothing()`). The source recipe requires eight GPUs.
+frozen (`freeze_filter=nnx.Nothing()`). The training recipe requires eight GPUs.
 
 ```bash
 uv run --project policy/openpi scripts/robocasa/train.py --exp-name my_run
 ```
 
-The entrypoint retains the source training schedule and checks GPU availability. Use
+The entrypoint checks GPU availability before training. Use
 `--resume` to continue a run. The checkpoints include normalization assets;
 serving also requires the recipe's normalization paths to remain available.
-No full simulator rollout or GPU training run was performed during this cleanup.
