@@ -11,8 +11,6 @@
 
 [![Project Overview](https://img.shields.io/badge/Project-Overview-3366cc?style=plastic&logo=googlechrome&logoColor=white)](docs/overview.md)
 [![Paper: Coming soon](https://img.shields.io/badge/Paper-Coming_soon-b31b1b?style=plastic&logo=arxiv&logoColor=white)](#paper)
-[![RoboCasa](https://img.shields.io/badge/RoboCasa-Inference_%26_Training-357a38?style=plastic&logo=python&logoColor=white)](docs/robocasa.md)
-[![BEHAVIOR](https://img.shields.io/badge/BEHAVIOR-Quick_Start-7952b3?style=plastic)](docs/deployment.md)
 [![Status](https://img.shields.io/badge/Status-Private_Preview-555555?style=plastic&logo=github&logoColor=white)](docs/release-scope.md)
 
 <img src="docs/assets/framework.png" alt="MobiAgent dual-loop architecture: deployment through planning, skill execution and reflection, and offline policy evolution through skill discovery and training" width="100%">
