@@ -20,7 +20,7 @@ def make_env(kind: str, **kwargs: Any) -> EnvProtocol:
     if kind == "robocasa":
         from mobiagent.environments.robocasa import RoboCasaEnv
         return RoboCasaEnv(**kwargs)
-    raise ValueError(f"unknown env kind: {kind!r}; valid: mock, omni")
+    raise ValueError(f"unknown env kind: {kind!r}; valid: mock, omni, robocasa")
 
 
 __all__ = ["make_env"]

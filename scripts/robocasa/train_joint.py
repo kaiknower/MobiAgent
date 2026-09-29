@@ -1,4 +1,4 @@
-"""Eight-GPU RoboCasa v3 joint training with the archived BEHAVIOR expert towers."""
+"""RoboCasa joint training: shared VLM and six action experts (eight GPUs)."""
 import pandas as _pandas_preload  # native library import order
 
 import argparse
@@ -19,7 +19,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-import train as base_train
+from openpi.training import runner as base_train
 from openpi.models import model as model_lib
 from openpi.training import checkpoints, config, optimizer, sharding, weight_loaders
 from openpi.training.robocasa_data import (

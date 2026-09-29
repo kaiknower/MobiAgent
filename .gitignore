@@ -6,7 +6,8 @@
 *.key
 configs/policy_servers.yaml
 configs/task_instructions.json
-configs/robocasa_data.json
+configs/robocasa/data.json
+configs/robocasa/policy_servers.yaml
 # External data, weights, logs, and generated artifacts
 /data/
 /datasets/

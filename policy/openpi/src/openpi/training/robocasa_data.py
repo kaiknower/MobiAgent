@@ -18,7 +18,7 @@ from openpi.training.transforms_normalize import PerExpertNormalize
 SKILLS = ('close', 'open', 'switch', 'manipulate', 'navigate', 'pnp')
 BUDGETS = (30000, 30000, 35000, 30000, 25000, 45000)
 ROOT = Path(__file__).resolve().parents[4]
-RECIPE = Path(os.environ.get('MOBIAGENT_ROBOCASA_RECIPE', 'configs/robocasa_data.json'))
+RECIPE = Path(os.environ.get('MOBIAGENT_ROBOCASA_RECIPE', 'configs/robocasa/data.json'))
 STATE_KEYS = ('end_effector_position_relative', 'end_effector_rotation_relative',
               'base_position', 'base_rotation', 'gripper_qpos')
 ACTION_KEYS = ('end_effector_position', 'end_effector_rotation', 'gripper_close',

@@ -9,7 +9,6 @@ mobiagent-discover --platform behavior --dataset-root /path/to/behavior \
   --tasks task-0001 task-0003 --output-root outputs/discovery/behavior
 ```
 
-For the S1 dataset use `--platform s1` and the task IDs present in that dataset.
 The extracted pipelines align video, robot state and actions, call a configured
 multimodal provider, and generate skill descriptions and segment annotations.
 They support Azure OpenAI and Gemini; supply your own credentials. Inspect the

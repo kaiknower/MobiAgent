@@ -15,9 +15,6 @@ dependencies = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.uv]
-dev-dependencies = ["pytest>=8.3.4"]
-
 [tool.ruff]
 line-length = 120
 target-version = "py37"

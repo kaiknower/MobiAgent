@@ -1,4 +1,4 @@
-"""Six-GPU v3 control: frozen shared VLM and six trainable action experts."""
+"""RoboCasa training: frozen shared VLM and six trainable action experts (six GPUs)."""
 import pandas as _pandas_preload
 
 import argparse
@@ -18,8 +18,8 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-import train as base_train
-from train_robocasa_joint import (
+from openpi.training import runner as base_train
+from train_joint import (
     AssetProvider, OUTPUT, head_for_path, recipe as joint_recipe, validate_assets,
 )
 from openpi.models import model as model_lib

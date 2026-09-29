@@ -110,10 +110,10 @@ def load_task_instruction(sim_task_name: str) -> str:
 
 # ---------- CLI ----------
 
-def main() -> int:
+def main(argv=None, *, default_env="mock", default_policy_servers=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--task", required=True, help="sim task name e.g. task-0001")
-    ap.add_argument("--env", default="mock", choices=["mock", "omni", "robocasa"])
+    ap.add_argument("--env", default=default_env, choices=["mock", "omni", "robocasa"])
     ap.add_argument("--instruction", default=None, help="override the global goal")
     ap.add_argument("--run-dir", default=None, help="output dir; default = runs/<task>_<timestamp>")
     ap.add_argument("--dry-run", action="store_true",
@@ -122,14 +122,14 @@ def main() -> int:
                     help="run full Orchestrator with mock policy registry + mock planner + mock judge")
     ap.add_argument("--mock-judge", default="always_complete",
                     choices=["always_complete", "alternating", "fail_then_replan"])
-    ap.add_argument("--policy-servers", default=None,
+    ap.add_argument("--policy-servers", default=default_policy_servers,
                     help="path to policy_servers.yaml (when not --mock-all)")
     ap.add_argument("--max-ticks", type=int, default=200)
     ap.add_argument("--instance-id", type=int, default=None,
                     help="public test instance id (TRO state overlay); --env omni only")
     ap.add_argument("--max-episode-steps", type=int, default=None,
-                    help="OmniGibson env step cap; --env omni only (default 5000)")
-    args = ap.parse_args()
+                    help="Simulator step cap (OmniGibson default 5000; RoboCasa default 3000)")
+    args = ap.parse_args(argv)
 
     if args.run_dir:
         run_dir = Path(args.run_dir)

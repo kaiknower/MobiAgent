@@ -14,16 +14,11 @@ import openpi.models.pi0_config as pi0_config
 import openpi.models.pi0_fast as pi0_fast
 import openpi.models.pi0_six_head_config as pi0_six_head_config
 import openpi.models.tokenizer as _tokenizer
-import openpi.policies.aloha_policy as aloha_policy
 import openpi.policies.behavior_policy as behavior_policy
-import openpi.policies.droid_policy as droid_policy
-import openpi.policies.libero_policy as libero_policy
 import openpi.shared.download as _download
 import openpi.shared.nnx_utils as nnx_utils
 import openpi.shared.normalize as _normalize
 import openpi.training.droid_rlds_dataset as droid_rlds_dataset
-import openpi.training.misc.polaris_config as polaris_config
-import openpi.training.misc.roboarena_config as roboarena_config
 import openpi.training.optimizer as _optimizer
 import openpi.training.weight_loaders as weight_loaders
 import openpi.transforms as _transforms
@@ -170,38 +165,6 @@ class BehaviorSegmentDataConfig(DataConfigFactory):
         return dataclasses.replace(base_config, data_transforms=data_transforms, model_transforms=model_transforms, action_sequence_keys=('action',), use_quantile_norm=base_config.use_quantile_norm if self.force_use_quantile_norm is None else self.force_use_quantile_norm, use_per_timestamp_norm=self.use_per_timestamp_norm, behavior_dataset_root=self.behavior_dataset_root, behavior_manifest_path=self.manifest_path, behavior_frame_cache_root=self.frame_cache_root, behavior_video_tolerance_s=self.video_tolerance_s, behavior_runtime_stage_id=self.runtime_stage_id, behavior_task_index_filter=self.task_index_filter, behavior_prompt_style=self.prompt_style, behavior_stage_balanced_sampling=self.stage_balanced_sampling)
 
 @dataclasses.dataclass(frozen=True)
-class _ZeroChassisInState(_transforms.DataTransformFn):
-    """Zero the chassis dims (last 3 of the 32-dim s1 state) AFTER DeltaActionsSO3
-    has used them. Keeps the model from cheating on absolute base position while
-    still letting DeltaActionsSO3 compute action chassis delta correctly.
-    """
-
-    def __call__(self, data: dict) -> dict:
-        import numpy as _np
-        if 'state' in data:
-            s = _np.asarray(data['state'], dtype=_np.float32).copy()
-            s[..., -3:] = 0.0
-            data = {**data, 'state': s}
-        return data
-
-@dataclasses.dataclass(frozen=True)
-class _SkillCanonicalIdPassthrough(_transforms.DataTransformFn):
-    """Forward ``skill_canonical_id`` (set by SkillSegmentDataset) to the model.
-
-    SkillSegmentInputs already does this internally for the BEHAVIOR path; for
-    the s1_mobile path the policy file (s1_mobile_policy.py) does NOT emit it,
-    so this small dataclass keeps the 6-head router routing correctly without
-    requiring s1_mobile_policy to know about the router contract.
-    """
-
-    def __call__(self, data: dict) -> dict:
-        import numpy as _np
-        if 'skill_canonical_id' in data:
-            sid = _np.asarray(data['skill_canonical_id'], dtype=_np.int32)
-            data = {**data, 'skill_canonical_ids': sid}
-        return data
-
-@dataclasses.dataclass(frozen=True)
 class SkillSegmentsDataConfig(DataConfigFactory):
     """DataConfigFactory for the 6-head skill_segments_v1 plan.
 
@@ -242,29 +205,21 @@ class SkillSegmentsDataConfig(DataConfigFactory):
     @override
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
         from openpi.policies import skill_segment_policy
-        is_s1_mobile = self.state_column != 'observation.state' or self.action_column != 'action'
-        if is_s1_mobile:
-            from openpi.policies import s1_mobile_policy
-            from openpi import transforms_so3 as _transforms_so3
-            so3_structure = (9, 9, -1, 9, -1, -3)
-            delta_action_mask = tuple([True] * 9 + [True] * 9 + [False] + [True] * 9 + [False] + [True] * 3) if self.use_delta_joint_actions else _transforms.make_bool_mask(-32)
-            inputs_xform = s1_mobile_policy.S1MobileInputs(model_type=model_config.model_type)
-            outputs_xform = s1_mobile_policy.S1MobileOutputs()
-        else:
-            if self.use_delta_joint_actions:
-                delta_action_mask = _transforms.make_bool_mask(-3, 3, -1, 7, -1, 7, -1)
-            else:
-                delta_action_mask = _transforms.make_bool_mask(-23)
-            inputs_xform = skill_segment_policy.SkillSegmentInputs(model_type=model_config.model_type)
-            outputs_xform = skill_segment_policy.SkillSegmentOutputs()
-        if is_s1_mobile:
-            inputs_chain = [inputs_xform, _SkillCanonicalIdPassthrough(), _transforms_so3.DeltaActionsSO3(mask=delta_action_mask, structure=so3_structure, state_key='action_delta_state' if self.use_per_frame_state_delta else 'state'), _ZeroChassisInState(), _transforms.DropKeys(('action_delta_state',))]
-        else:
-            inputs_chain = [inputs_xform, _transforms.DeltaActions(delta_action_mask, state_key='action_delta_state' if self.use_per_frame_state_delta else 'state'), _transforms.DropKeys(('action_delta_state',))]
-        if is_s1_mobile:
-            data_transforms = _transforms.Group(inputs=inputs_chain, outputs=[_transforms_so3.AbsoluteActionsSO3(mask=delta_action_mask, structure=so3_structure), outputs_xform])
-        else:
-            data_transforms = _transforms.Group(inputs=inputs_chain, outputs=[_transforms.RollingAbsoluteActions(delta_action_mask) if self.use_per_frame_state_delta else _transforms.AbsoluteActions(delta_action_mask), outputs_xform])
+        delta_action_mask = (
+            _transforms.make_bool_mask(-3, 3, -1, 7, -1, 7, -1)
+            if self.use_delta_joint_actions else _transforms.make_bool_mask(-23)
+        )
+        data_transforms = _transforms.Group(
+            inputs=[
+                skill_segment_policy.SkillSegmentInputs(model_type=model_config.model_type),
+                _transforms.DeltaActions(delta_action_mask, state_key='action_delta_state' if self.use_per_frame_state_delta else 'state'),
+                _transforms.DropKeys(('action_delta_state',)),
+            ],
+            outputs=[
+                _transforms.RollingAbsoluteActions(delta_action_mask) if self.use_per_frame_state_delta else _transforms.AbsoluteActions(delta_action_mask),
+                skill_segment_policy.SkillSegmentOutputs(),
+            ],
+        )
         model_transforms = ModelTransformFactory()(model_config)
         base_config = self.create_base_config(assets_dirs, model_config)
         sampler_weights_path = self.sampler_weights_path
@@ -362,13 +317,13 @@ def _six_head_freeze_paligemma_backbone_filter() -> Filter:
 # Portable baseline recipes; dataset and checkpoint locations are user supplied.
 import os
 
-def _skill_recipe(name, heads, *, s1=False):
+def _skill_recipe(name, heads):
     return TrainConfig(
         name=name, exp_name="run", project_name="mobiagent",
         model=pi0_six_head_config.Pi0SixHeadConfig(
             expert_names=heads, action_dim=32,
-            action_horizon=32 if s1 else 50, max_token_len=200,
-            discrete_state_input=False if s1 else True),
+            action_horizon=50, max_token_len=200,
+            discrete_state_input=True),
         freeze_filter=_six_head_freeze_paligemma_backbone_filter(),
         weight_loader=weight_loaders.Pi05BaseToSixHeadLoader(
             params_path=os.environ.get("MOBIAGENT_BASE_PARAMS", "gs://openpi-assets/checkpoints/pi05_base/params"),
@@ -378,9 +333,9 @@ def _skill_recipe(name, heads, *, s1=False):
             skill_segments_dir=os.environ.get("MOBIAGENT_SEGMENTS_DIR", "data/segments"),
             num_experts=len(heads), canonical_heads=heads,
             per_expert=4, per_expert_proportional=False,
-            use_per_expert_norm=not s1, force_use_quantile_norm=False,
-            state_column="cartesian_so3_dict.cartesian_pose_state" if s1 else "observation.state",
-            action_column="cartesian_so3_dict.cartesian_pose_command" if s1 else "action",
+            use_per_expert_norm=True, force_use_quantile_norm=False,
+            state_column="observation.state",
+            action_column="action",
             skill_prompt_style="skill_only"),
         batch_size=4*len(heads), num_workers=2, fsdp_devices=1,
         wandb_enabled=False,
@@ -389,7 +344,6 @@ def _skill_recipe(name, heads, *, s1=False):
 
 _CONFIGS = [
     _skill_recipe("mobiagent_behavior", ("move_to", "pick_up_from", "place_in", "place_on", "open", "close")),
-    _skill_recipe("mobiagent_s1", ("move_to", "pick_up", "place"), s1=True),
     TrainConfig(name="debug", exp_name="debug", model=pi0_config.Pi0Config(paligemma_variant="dummy", action_expert_variant="dummy"), data=FakeDataConfig(), batch_size=2, num_train_steps=2, wandb_enabled=False),
 ]
 _CONFIGS_DICT = {config.name: config for config in _CONFIGS}

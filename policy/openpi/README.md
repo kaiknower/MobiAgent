@@ -1,9 +1,12 @@
 # MobiAgent policy backend
 
-This is the OpenPI-derived backend extracted from the S1 deployment and A100
-training workspaces. It contains the shared VLM, routed flow-matching experts,
-normalization, data loaders, training, and WebSocket serving code.
+OpenPI-derived shared VLM, routed action experts, normalization, data loading,
+training and WebSocket serving for BEHAVIOR and RoboCasa simulation.
 
-See [the training guide](../../docs/training.md) for installation and entrypoints.
+- [RoboCasa inference and training](../../docs/robocasa.md)
+- [BEHAVIOR training and serving](../../docs/training.md)
+- [`src/openpi/training/`](src/openpi/training/): shared training implementation
+- [`src/openpi/serving/`](src/openpi/serving/): shared policy server
+
 The upstream Apache-2.0 license and Gemma notice are retained in this directory.
 Historical experiment configurations and generated assets are excluded.

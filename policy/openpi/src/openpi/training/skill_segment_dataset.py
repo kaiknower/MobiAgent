@@ -57,9 +57,7 @@ def _read_parquet_state_action(
     for ``list<double>`` columns).
 
     Columns default to BEHAVIOR-1K's ``observation.state`` (256-dim) / ``action`` (23-dim);
-    pass alternative column names for other datasets (e.g. s1_mobile uses
-    ``cartesian_so3_dict.cartesian_pose_state`` / ``cartesian_so3_dict.cartesian_pose_command``,
-    both 34-dim). When defaults are used the hardcoded reshapes preserve legacy behavior
+    pass alternative column names for other datasets. Default columns retain the explicit shapes
     exactly; for non-default columns the inner dimension is inferred from the parquet
     list values (``value_length``) so this helper supports arbitrary dims.
     """
@@ -155,7 +153,7 @@ class SkillSegmentRow:
 
     @property
     def task_index(self) -> int:
-        # "task-0020" -> 20 (behavior); for non-numeric task_id (s1: "pour-blue",
+        # "task-0020" -> 20 (behavior); for non-numeric task_id (e.g. "pour-blue",
         # "trash-bottle-1" etc.) fall back to a stable deterministic int from
         # the full task_id so downstream code that treats it as a category still
         # works (different task_ids → different ints, same task_id → same int).
@@ -166,7 +164,7 @@ class SkillSegmentRow:
 
     @property
     def episode_index(self) -> int:
-        # "episode_00200360" -> 200360 (behavior); "episode_000007" (s1) also works.
+        # "episode_00200360" -> 200360 (behavior); "episode_000007" also works.
         last = self.episode_id.split("_")[-1]
         if last.isdigit():
             return int(last)

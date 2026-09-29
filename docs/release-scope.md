@@ -1,41 +1,27 @@
 # Private preview scope
 
-This repository was assembled from the project's BEHAVIOR execution / discovery
-and policy workspaces on the 4090 host, and its S1, RoboCasa and shared-VLM training
-workspaces on the A100 host. Original workspaces were read only and left unchanged.
+This repository contains the project's simulation code, extracted from its
+BEHAVIOR and RoboCasa workspaces. Original workspaces remain unchanged.
 
 Included:
 
-- Reactive planner, policy routing, visual critic and retry/replan control loop.
-- BEHAVIOR and S1 offline demonstration / skill-discovery pipelines.
-- S1 robot bridge contract and RoboCasa observation/action conversion.
-- Shared-VLM / multiple-action-expert model, data loaders, training and serving.
-- Configuration templates, installation guides and CPU tests.
+- Shared planner, policy routing, visual critic and retry/replan control loop.
+- BEHAVIOR execution, offline demonstration processing and skill discovery.
+- RoboCasa simulator adapter, inference entrypoint and policy server.
+- RoboCasa frozen-backbone and joint-training entrypoints.
+- Shared VLM, action experts, data loaders and configuration templates.
 
 Excluded:
 
-- Experiment results, aggregate tables, logs, rollout videos, caches, datasets,
-  normalization values and trained checkpoints.
-- Credentials, private service endpoints, hostnames and machine-specific paths.
-- Benchmark batch launchers, fixed expert-routing overrides, scripted navigation
-  pose corrections, forced arm poses, simulator pose rollback, verdict overrides,
-  ground-truth subtask probes, and task-specific annotation repair scripts.
-- Unrelated agent integrations, chat connectors, old baselines and experiment notes.
+- Physical robot integration, S1-specific code and test suites.
+- Results, logs, videos, caches, datasets, normalization values and checkpoints.
+- Credentials, private endpoints and machine-specific paths.
+- Fixed expert-routing overrides, scripted navigation corrections, forced poses,
+  simulator pose rollback, verdict overrides and task-specific annotation repairs.
 
-The cleaned deployment runtime uses task-independent visual judging; the portable
-training recipes replace historical experiment variants. These intentional changes
-mean this snapshot is **not an exact reproduction package for the paper's reported
-numbers**. Documentation and tests distinguish source extraction from integration
-validation. Full GPU training, simulator rollout and robot execution are not tested
-in this preparation task.
+The cleaned runtime and portable recipes are not an exact reproduction package
+for the paper's reported numbers. Source and interface checks do not establish
+full simulator or GPU training performance; those runs require external assets.
 
-Public project, paper, dataset, weight and license links remain pending. The GitHub
-repository must remain private until its owner explicitly decides to publish it.
-
-## Validation performed
-
-- 32 CPU tests passed for the reactive loop, skill routing, retry/replan history,
-  S1 state handling, RoboCasa policy payload, and offline data utilities.
-- Source syntax, configuration syntax, and scans for credentials, private
-  endpoints, machine paths, and excluded artifacts passed.
-- GPU training, full simulator rollouts, and robot execution were not run.
+Paper and citation details remain pending. The repository remains private until
+its owner decides to publish it. No public license has been selected.

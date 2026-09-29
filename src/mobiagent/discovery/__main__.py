@@ -6,7 +6,7 @@ from pathlib import Path
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-root", type=Path, required=True)
-    parser.add_argument("--platform", choices=["behavior", "s1"], default="behavior")
+    parser.add_argument("--platform", choices=["behavior"], default="behavior")
     parser.add_argument("--tasks", nargs="+")
     parser.add_argument("--output-root", type=Path, default=Path("outputs/discovery"))
     args = parser.parse_args()
