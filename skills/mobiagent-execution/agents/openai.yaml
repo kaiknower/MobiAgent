@@ -1,0 +1,4 @@
+interface:
+  display_name: "MobiAgent Execution"
+  short_description: "Run long-horizon tasks in simulation"
+  default_prompt: "Use $mobiagent-execution to carry out the requested MobiAgent workflow."

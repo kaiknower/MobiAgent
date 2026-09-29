@@ -1,0 +1,4 @@
+interface:
+  display_name: "MobiAgent Policy Training"
+  short_description: "Train and resume RoboCasa or BEHAVIOR policies"
+  default_prompt: "Use $mobiagent-training to carry out the requested MobiAgent workflow."

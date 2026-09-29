@@ -1,0 +1,4 @@
+interface:
+  display_name: "MobiAgent Data Preparation"
+  short_description: "Prepare per-expert BEHAVIOR training shards"
+  default_prompt: "Use $mobiagent-data to carry out the requested MobiAgent workflow."

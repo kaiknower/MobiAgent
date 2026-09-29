@@ -26,9 +26,29 @@ MobiAgent connects a deployment loop of **planning, skill execution, and visual 
 
 The paper link will be added here when available.
 
+## Agent skills
+
+Reusable agent workflows are defined in [`skills/`](skills/), each with a
+`SKILL.md` and agent metadata. They call the shared Python implementation for
+simulation execution and offline policy evolution.
+
+| Skill | Capability |
+| --- | --- |
+| [mobiagent-execution](skills/mobiagent-execution/SKILL.md) | Policy serving, long-horizon execution and visual feedback |
+| [mobiagent-discovery](skills/mobiagent-discovery/SKILL.md) | Demonstration annotation and offline skill discovery |
+| [mobiagent-data](skills/mobiagent-data/SKILL.md) | Temporal alignment, training segments and per-expert shards |
+| [mobiagent-training](skills/mobiagent-training/SKILL.md) | RoboCasa joint training and BEHAVIOR policy training |
+
+See [using agent skills](docs/skills.md) for invocation and implementation details.
+
 ## Repository layout
 
 ```text
+skills/                 Agent workflow packages (SKILL.md + agent metadata)
+  mobiagent-execution/  Long-horizon task execution and policy serving
+  mobiagent-discovery/  Offline skill discovery from demonstrations
+  mobiagent-data/       Training-data preparation and expert splitting
+  mobiagent-training/   Policy training and checkpoint handoff
 scripts/
   robocasa/           RoboCasa entrypoints: infer, serve, train
   data/               Demonstration segmentation and per-expert data splitting
@@ -41,7 +61,7 @@ src/mobiagent/
 policy/openpi/
   src/openpi/         Shared model, policy serving and training implementation
   scripts/            BEHAVIOR training, serving and preprocessing entrypoints
-docs/                 RoboCasa workflow, BEHAVIOR setup and architecture
+docs/                 Skill usage, benchmark setup and architecture
 ```
 
 | Workflow | Entry point | Guide |
