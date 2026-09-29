@@ -15,6 +15,7 @@
 
 [![Project Overview](https://img.shields.io/badge/Project-Overview-3366cc?style=plastic&logo=googlechrome&logoColor=white)](docs/overview.md)
 [![Paper: Coming soon](https://img.shields.io/badge/Paper-Coming_soon-b31b1b?style=plastic&logo=arxiv&logoColor=white)](#paper)
+[![Hugging Face Model Weights: Coming soon](https://img.shields.io/badge/Model_Weights-Coming_soon-ffcc4d?style=plastic&logo=huggingface)](#model-weights)
 
 <img src="docs/assets/framework.png" alt="MobiAgent dual-loop architecture: deployment through planning, skill execution and reflection, and offline policy evolution through skill discovery and training" width="100%">
 
@@ -25,6 +26,10 @@ MobiAgent connects a deployment loop of **planning, skill execution, and visual 
 ## Paper
 
 The paper link will be added here when available.
+
+## Model weights
+
+Hugging Face checkpoints: coming soon.
 
 ## Agent skills
 
