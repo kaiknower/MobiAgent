@@ -8,7 +8,7 @@ Included:
 - Shared planner, policy routing, visual critic and retry/replan control loop.
 - BEHAVIOR execution, offline demonstration processing and skill discovery.
 - RoboCasa simulator adapter, inference entrypoint and policy server.
-- RoboCasa frozen-backbone and joint-training entrypoints.
+- RoboCasa joint training of the shared VLM and all six action experts.
 - Shared VLM, action experts, data loaders and configuration templates.
 
 Excluded:

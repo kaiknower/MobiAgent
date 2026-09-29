@@ -12,8 +12,7 @@ parameters, normalization files and trained checkpoints are external assets.
 | Simulator observations and actions | [`src/mobiagent/environments/robocasa.py`](../src/mobiagent/environments/robocasa.py) |
 | Planner, visual critic and control loop | [`src/mobiagent/execution/`](../src/mobiagent/execution/) |
 | Policy serving entrypoint | [`scripts/robocasa/serve.py`](../scripts/robocasa/serve.py) |
-| Frozen-backbone training | [`scripts/robocasa/train.py`](../scripts/robocasa/train.py) |
-| Joint training | [`scripts/robocasa/train_joint.py`](../scripts/robocasa/train_joint.py) |
+| Joint training (trainable VLM) | [`scripts/robocasa/train.py`](../scripts/robocasa/train.py) |
 | Dataset reader and normalization | [`policy/openpi/src/openpi/training/robocasa_data.py`](../policy/openpi/src/openpi/training/robocasa_data.py) |
 | Shared VLM and action experts | [`policy/openpi/src/openpi/models/pi0_six_head.py`](../policy/openpi/src/openpi/models/pi0_six_head.py) |
 
@@ -80,19 +79,14 @@ it does not override the visual critic's decision.
 
 ## Training
 
-Frozen shared VLM with trainable action experts (six GPUs):
+The shared VLM and all six action experts are trained jointly. The VLM is not
+frozen (`freeze_filter=nnx.Nothing()`). The source recipe requires eight GPUs.
 
 ```bash
 uv run --project policy/openpi scripts/robocasa/train.py --exp-name my_run
 ```
 
-Joint training of the shared VLM and action experts (eight GPUs):
-
-```bash
-uv run --project policy/openpi scripts/robocasa/train_joint.py --exp-name my_joint_run
-```
-
-These retain the source training schedules and check GPU availability. Use
+The entrypoint retains the source training schedule and checks GPU availability. Use
 `--resume` to continue a run. The checkpoints include normalization assets;
 serving also requires the recipe's normalization paths to remain available.
 No full simulator rollout or GPU training run was performed during this cleanup.

@@ -1,5 +1,5 @@
-"""RoboCasa training: frozen shared VLM and six trainable action experts (six GPUs)."""
-import pandas as _pandas_preload
+"""RoboCasa joint training: shared VLM and six action experts (eight GPUs)."""
+import pandas as _pandas_preload  # native library import order
 
 import argparse
 import dataclasses
@@ -9,6 +9,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import shutil
 import time
 
@@ -19,232 +20,212 @@ import numpy as np
 import optax
 
 from openpi.training import runner as base_train
-from train_joint import (
-    AssetProvider, OUTPUT, head_for_path, recipe as joint_recipe, validate_assets,
-)
 from openpi.models import model as model_lib
-from openpi.training import checkpoints, sharding
-from openpi.training.robocasa_data import BUDGETS, ROOT, SKILLS, counts_at, torch_loader
+from openpi.training import checkpoints, config, optimizer, sharding, weight_loaders
+from openpi.training.robocasa_data import (
+    BUDGETS, ROOT, SKILLS, RoboCasaV3Data, counts_at, model_config, source_recipe, torch_loader,
+)
+
+OUTPUT = Path(os.environ.get('MOBIAGENT_CHECKPOINT_DIR', 'checkpoints/robocasa'))
 
 
-def frozen_vlm(path, value):
-    del value
-    return head_for_path(path) == -1
+def head_for_path(path):
+    parts = [str(getattr(p, 'key', getattr(p, 'idx', getattr(p, 'name', p)))) for p in path]
+    for index, part in enumerate(parts):
+        if part in ('action_in_projs', 'action_out_projs', 'time_mlp_ins', 'time_mlp_outs'):
+            return int(parts[index + 1])
+    if 'llm' in parts:
+        for part in parts:
+            match = re.search(r'_([1-6])$', part)
+            if match:
+                return int(match.group(1)) - 1
+    return -1
 
 
-def recipe(exp_name='frozen_vlm', resume=False):
-    return dataclasses.replace(joint_recipe(exp_name, resume),
-        name='pi05_robocasa_frozen_vlm_v3', freeze_filter=frozen_vlm,
-        batch_size=48, fsdp_devices=2)
+@dataclasses.dataclass(frozen=True)
+class V3Optimizer:
+    def create(self, lr, weight_decay_mask=None):
+        assert weight_decay_mask is None
+
+        def schedule(budget):
+            decay = optimizer.CosineDecaySchedule(decay_steps=budget).create()
+            return lambda step: jnp.where(step < budget, decay(step), 0.0)
+
+        schedules = {-1: lr, **{i: schedule(b) for i, b in enumerate(BUDGETS)}}
+        transforms = {str(i): optax.adamw(fn, b1=0.9, b2=0.95, eps=1e-8, weight_decay=1e-10)
+                      for i, fn in schedules.items()}
+        labels = lambda params: jax.tree_util.tree_map_with_path(
+            lambda path, _: str(head_for_path(path)), params)
+        return optax.chain(optax.clip_by_global_norm(1.0), optax.multi_transform(transforms, labels))
 
 
-def padded_counts(counts):
-    return tuple(12 if count else 0 for count in counts)
+@dataclasses.dataclass(frozen=True)
+class StrictHuman300Loader(weight_loaders.Pi05BaseToSixHeadLoader):
+    def load(self, params):
+        result = super().load(params)
+        missing = [jax.tree_util.keystr(path) for path, value in jax.tree_util.tree_flatten_with_path(result)[0]
+                   if isinstance(value, jax.ShapeDtypeStruct)]
+        if missing:
+            raise ValueError(f'Uninitialized checkpoint leaves: {missing}')
+        return result
 
 
-def pad_batch(raw, counts):
-    indices = []
-    offset = 0
-    for count in counts:
-        if count:
-            assert count == 8
-            indices.extend(range(offset, offset + count))
-            indices.extend([offset] * 4)
-            offset += count
-    assert offset == raw['actions'].shape[0]
-    return jax.tree.map(lambda value: value[np.asarray(indices)], raw)
-
-
-def valid_mask(counts):
-    return jnp.asarray([i < 8 for count in counts if count for i in range(12)])
-
-
-def apply_grads(cfg, counts, state, grads):
-    trainable = state.params.filter(cfg.trainable_filter)
-    updates, opt_state = state.tx.update(grads, state.opt_state, trainable)
-    model = nnx.merge(state.model_def, state.params)
-    nnx.update(model, optax.apply_updates(trainable, updates))
-    params = nnx.state(model)
-
-    def ema(path, old, new):
-        head = head_for_path(path)
-        if head == -1 or counts[head] == 0:
-            return old
-        return cfg.ema_decay * old + (1 - cfg.ema_decay) * new
-
-    ema_params = jax.tree_util.tree_map_with_path(ema, state.ema_params, params)
-    return dataclasses.replace(state, step=state.step + 1, params=params,
-                               opt_state=opt_state, ema_params=ema_params)
+def recipe(exp_name, resume=False):
+    heads = source_recipe()
+    return config.TrainConfig(name='pi05_robocasa_shared_vlm_v3', exp_name=exp_name,
+        model=model_config(), data=RoboCasaV3Data(), freeze_filter=nnx.Nothing(),
+        optimizer=V3Optimizer(), lr_schedule=optimizer.CosineDecaySchedule(decay_steps=45000),
+        weight_loader=StrictHuman300Loader(heads['close']['base_params']),
+        batch_size=48, num_train_steps=45000, num_workers=2, fsdp_devices=8,
+        ema_decay=0.99, seed=42, checkpoint_base_dir=str(OUTPUT),
+        save_interval=5000, keep_period=None, log_interval=10,
+        wandb_enabled=False, resume=resume, overwrite=False)
 
 
 def step_fn(cfg, counts, rng, state, batch):
     rng = jax.random.fold_in(rng, state.step)
-    observation, actions = batch
-    model = nnx.merge(state.model_def, state.params)
-    model.train()
-    mask = valid_mask(counts)
-
-    def loss_fn(model):
-        losses = model.compute_loss(rng, observation, actions, train=True,
-                                    per_expert_counts=padded_counts(counts))
-        per_sample = jnp.mean(losses, axis=tuple(range(1, losses.ndim)))
-        # Padding never changes real sample counts or the global loss denominator.
-        return jnp.sum(jnp.where(mask, per_sample, 0)) / sum(counts), per_sample
-
-    (loss, per_sample), grads = nnx.value_and_grad(
-        loss_fn, argnums=nnx.DiffState(0, cfg.trainable_filter), has_aux=True)(model)
-    grouped = {i: [] for i in range(6)}
+    grads, metrics = base_train._compute_grads_step(cfg, counts, rng, state, batch)
+    # Audit all gradient groups; inactive towers must stay exactly unchanged.
+    grouped = {i: [] for i in range(-1, 6)}
     for path, leaf in jax.tree_util.tree_flatten_with_path(grads)[0]:
+        grouped[head_for_path(path)].append(leaf)
+    for i, values in grouped.items():
+        metrics['grad/' + ('vlm' if i == -1 else SKILLS[i])] = optax.global_norm(values)
+    updates, opt_state = state.tx.update(grads, state.opt_state, state.params)
+    params = optax.apply_updates(state.params, updates)
+
+    def ema(path, old, new):
         head = head_for_path(path)
-        if head < 0:
-            raise RuntimeError('Frozen VLM unexpectedly present in gradient tree')
-        grouped[head].append(leaf)
-    metrics = {'loss': loss, 'grad_norm': optax.global_norm(grads), 'grad/vlm': jnp.asarray(0.)}
-    for index, name in enumerate(SKILLS):
-        selected = mask & (observation.skill_canonical_ids == index)
-        metrics['count/skill_' + name] = jnp.sum(selected)
-        metrics['loss/skill_' + name] = (
-            jnp.sum(jnp.where(selected, per_sample, 0)) / max(counts[index], 1))
-        metrics['grad/' + name] = optax.global_norm(grouped[index])
-    return apply_grads(cfg, counts, state, grads), metrics
+        if head >= 0 and counts[head] == 0:
+            return old
+        return cfg.ema_decay * old + (1 - cfg.ema_decay) * new
+
+    ema_params = jax.tree_util.tree_map_with_path(ema, state.ema_params, params)
+    state = dataclasses.replace(state, step=state.step + 1, params=params,
+                                opt_state=opt_state, ema_params=ema_params)
+    return state, metrics
 
 
-def vlm_digest(params, cfg):
-    digest = hashlib.sha256()
-    for path, leaf in jax.tree_util.tree_flatten_with_path(params.filter(cfg.freeze_filter))[0]:
-        array = np.asarray(jax.device_get(leaf))
-        digest.update(jax.tree_util.keystr(path).encode())
-        digest.update(str((array.shape, array.dtype)).encode())
-        digest.update(array.tobytes())
-    return digest.hexdigest()
+class AssetProvider:
+    def __init__(self, cfg):
+        self.value = cfg.data.create(cfg.assets_dirs, cfg.model)
+
+    def data_config(self):
+        return self.value
 
 
-def verify_frozen(state, cfg, expected):
-    actual = vlm_digest(state.params, cfg)
-    ema = vlm_digest(state.ema_params, cfg)
-    if actual != expected or ema != expected:
-        raise RuntimeError('Frozen VLM or its EMA changed')
-    logging.info('FROZEN VLM VERIFIED step=%d sha256=%s', int(state.step), actual)
+def validate_assets(directory):
+    names = json.loads((directory / 'assets/expert_names.json').read_text())
+    assert tuple(names) == SKILLS
+    heads = source_recipe()
+    from openpi.shared import normalize
+    for name in names:
+        expected = normalize.load(Path(heads[name]['norm_path']).parent)
+        actual = normalize.load(directory / 'assets/per_expert' / name)
+        for key in expected:
+            for field in ('mean', 'std', 'q01', 'q99'):
+                np.testing.assert_array_equal(getattr(actual[key], field), getattr(expected[key], field))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--exp-name', default='frozen_vlm')
+    parser.add_argument('--exp-name', default='joint')
     parser.add_argument('--stop-after', type=int, default=45000)
     parser.add_argument('--resume', action='store_true')
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO)
     base_train.init_logging()
     cfg = recipe(args.exp_name, args.resume)
-    assert 2 <= args.stop_after <= 45000
-    visible = [int(value) for value in os.environ['CUDA_VISIBLE_DEVICES'].split(',')]
-    assert len(visible) == 6 and len(set(visible)) == 6
+    if not 2 <= args.stop_after <= 45000:
+        raise ValueError('stop-after must be between 2 and 45000')
     import pynvml as nv
     nv.nvmlInit()
     try:
-        for index in visible:
+        for index in range(8):
             handle = nv.nvmlDeviceGetHandleByIndex(index)
             others = [p.pid for p in nv.nvmlDeviceGetComputeRunningProcesses(handle) if p.pid != os.getpid()]
             if others or nv.nvmlDeviceGetMemoryInfo(handle).free < 70 * 2**30:
-                raise RuntimeError(f'GPU {index} unavailable: {others}')
+                raise RuntimeError(f'GPU {index} not available: {others}')
     finally:
         nv.nvmlShutdown()
-    assert jax.device_count() == 6
-    if shutil.disk_usage(OUTPUT).free < (65 if args.resume else 120) * 2**30:
-        raise RuntimeError('Insufficient checkpoint replacement space')
-    mesh = sharding.make_mesh(cfg.fsdp_devices)
+    assert jax.device_count() == 8, jax.devices()
+    # Keep space for both a new checkpoint and the existing latest one.
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    required = 100 if args.resume else 180
+    if shutil.disk_usage(OUTPUT).free < required * 2**30:
+        raise RuntimeError(f'Need at least {required} GiB free on checkpoint filesystem')
+    mesh = sharding.make_mesh(8)
     data_sharding = jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec(sharding.DATA_AXIS))
     replicated = jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec())
     manager, resuming = checkpoints.initialize_checkpoint_dir(cfg.checkpoint_dir,
-        keep_period=None, overwrite=False, resume=args.resume, replica_parallel=False)
+        keep_period=None, overwrite=False, resume=args.resume)
     assets = AssetProvider(cfg)
     rng, init_rng = jax.random.split(jax.random.key(cfg.seed))
     state, state_sharding = base_train.init_train_state(cfg, init_rng, mesh, resume=resuming)
     if resuming:
         validate_assets(cfg.checkpoint_dir / str(manager.latest_step()))
         state = checkpoints.restore_state(manager, state, assets)
-        # Orbax's legacy restore retains the saved layout; a new mesh needs
-        # explicit resharding before the jitted train step accepts the state.
-        state = jax.device_put(state, state_sharding)
     jax.block_until_ready(state)
     start = int(state.step)
-    manifest = cfg.checkpoint_dir / 'frozen_recipe.json'
-    if args.resume:
-        saved = json.loads(manifest.read_text())
-        expected = saved['frozen_vlm_sha256']
-        assert start >= 2 and saved['normalization'] == 'per_skill_mean_std'
-        assert saved['skills'] == list(SKILLS) and saved['budgets'] == list(BUDGETS)
-        verify_frozen(state, cfg, expected)
-        saved.setdefault('initial_fsdp_devices', saved['fsdp_devices'])
-        saved['fsdp_devices'] = cfg.fsdp_devices
-        saved['data_parallel_groups'] = 6 // cfg.fsdp_devices
-        saved.setdefault('resume_mesh_history', []).append({
-            'step': start, 'fsdp_devices': cfg.fsdp_devices,
-            'data_parallel_groups': 6 // cfg.fsdp_devices, 'timestamp': time.time()})
-        manifest.write_text(json.dumps(saved, indent=2) + '\n')
-    else:
-        expected = vlm_digest(state.params, cfg)
-        groups = {i: 0 for i in range(-1, 6)}
-        for path, leaf in jax.tree_util.tree_flatten_with_path(state.params)[0]:
-            groups[head_for_path(path)] += leaf.size
-        manifest.write_text(json.dumps({
-            'skills': SKILLS, 'budgets': BUDGETS, 'initial_params': str(cfg.weight_loader.params_path),
-            'frozen_vlm_sha256': expected, 'frozen_vlm_dtype': 'bfloat16',
-            'frozen_vlm_parameters': groups[-1], 'trainable_parameters': sum(groups[i] for i in range(6)),
-            'gpus': visible, 'fsdp_devices': cfg.fsdp_devices,
-            'data_parallel_groups': 6 // cfg.fsdp_devices, 'per_active_head_real_batch': 8,
-            'per_active_head_padded_batch': 12, 'padding_in_loss': False,
-            'normalization': 'per_skill_mean_std', 'ema_decay': cfg.ema_decay,
-            'seed': cfg.seed, 'model': dataclasses.asdict(cfg.model),
-            'total_sample_exposures': sum(BUDGETS) * 8,
-            'note': 'Frozen VLM control from human300; not a resume of the joint-trained VLM.',
-        }, indent=2) + '\n')
-        verify_frozen(state, cfg, expected)
-    logging.info('STATE READY step=%d devices=6 frozen_vlm=True checkpoint=%s', start, cfg.checkpoint_dir)
+    if args.resume and start < 2:
+        raise RuntimeError('Formal resume requires a completed two-step checkpoint')
+    logging.info('STATE READY: step=%d devices=%d checkpoint=%s', start, jax.device_count(), cfg.checkpoint_dir)
+    cfg.checkpoint_dir.joinpath('joint_recipe.json').write_text(json.dumps({
+        'skills': SKILLS, 'budgets': BUDGETS, 'per_active_head_batch': 8,
+        'total_sample_exposures': sum(BUDGETS) * 8, 'shared_vlm_steps': 45000,
+        'shared_vlm_lr_decay_steps': 45000, 'expert_lr_decay_steps': BUDGETS,
+        'model': dataclasses.asdict(cfg.model), 'ema_decay': cfg.ema_decay,
+        'optimizer': 'AdamW b1=.9 b2=.95 eps=1e-8 wd=1e-10 global_clip=1',
+        'normalization': 'per_skill_mean_std',
+        'note': 'Joint shared backbone changes optimization versus six independent v3 models; no exact-reproduction claim.',
+    }, indent=2) + '\n')
     loader = torch_loader(start=start, stop=args.stop_after, workers=2)
     compiled = {}
+    metrics_path = cfg.checkpoint_dir / 'metrics.jsonl'
     try:
         for step, raw in enumerate(loader, start=start):
             counts = counts_at(step)
-            np.testing.assert_array_equal(raw['skill_canonical_ids'], np.repeat(np.arange(6), counts))
+            expected_ids = np.repeat(np.arange(6, dtype=np.int32), counts)
+            np.testing.assert_array_equal(raw['skill_canonical_ids'], expected_ids)
             assert raw['actions'].shape == (sum(counts), 50, 32)
             assert np.isfinite(raw['actions']).all() and np.isfinite(raw['state']).all()
-            raw = pad_batch(raw, counts)
             observation = model_lib.Observation.from_dict(raw)
             batch = jax.tree.map(lambda x: jax.device_put(x, data_sharding), (observation, raw['actions']))
             if counts not in compiled:
                 compiled[counts] = jax.jit(functools.partial(step_fn, cfg, counts),
                     in_shardings=(replicated, state_sharding, data_sharding),
                     out_shardings=(state_sharding, replicated), donate_argnums=(1,))
-                logging.info('Compiling phase step=%d real_counts=%s padded_counts=%s',
-                             step, counts, padded_counts(counts))
+                logging.info('Compiling phase: step=%d per_expert_counts=%s', step, counts)
             before = time.monotonic()
             with sharding.set_mesh(mesh):
                 state, info = compiled[counts](rng, state, batch)
-            metrics = {key: float(value) for key, value in jax.device_get(info).items()}
-            assert all(np.isfinite(value) for value in metrics.values()), metrics
-            assert metrics['grad/vlm'] == 0
+            info = jax.device_get(info)
+            metrics = {key: float(value) for key, value in info.items()}
+            for key, value in metrics.items():
+                if key.startswith('loss/skill_') and counts[SKILLS.index(key.removeprefix('loss/skill_'))] == 0:
+                    continue
+                if not np.isfinite(value):
+                    raise FloatingPointError((key, value))
             if step < 2:
-                assert all(metrics['grad/' + name] > 0 for name in SKILLS)
-            metrics.update(step=step + 1, timestamp=time.time(), seconds=time.monotonic() - before,
-                           per_expert_counts=counts, padded_per_expert_counts=padded_counts(counts))
-            with (cfg.checkpoint_dir / 'metrics.jsonl').open('a') as handle:
+                assert all(metrics['grad/' + name] > 0 for name in ('vlm', *SKILLS))
+            metrics.update(step=step + 1, seconds=time.monotonic() - before,
+                           timestamp=time.time(), per_expert_counts=counts)
+            with metrics_path.open('a') as handle:
                 handle.write(json.dumps(metrics) + '\n')
             if step < 2 or (step + 1) % 10 == 0:
-                logging.info('TRAIN step=%d loss=%.6f grad=%.6f vlm_grad=0 seconds=%.2f',
+                logging.info('TRAIN step=%d loss=%.6f grad=%.6f seconds=%.2f',
                              step + 1, metrics['loss'], metrics['grad_norm'], metrics['seconds'])
             if (step + 1) % 5000 == 0 or step + 1 == args.stop_after:
-                verify_frozen(state, cfg, expected)
-                if shutil.disk_usage(OUTPUT).free < 65 * 2**30:
-                    raise RuntimeError('Insufficient space for atomic checkpoint replacement')
+                if shutil.disk_usage(OUTPUT).free < 92 * 2**30:
+                    raise RuntimeError('Insufficient free space for atomic checkpoint replacement')
                 checkpoints.save_state(manager, state, assets, step + 1)
                 manager.wait_until_finished()
                 validate_assets(cfg.checkpoint_dir / str(step + 1))
                 logging.info('CHECKPOINT VERIFIED step=%d', step + 1)
         if args.stop_after == 2:
-            (cfg.checkpoint_dir / 'smoke_passed.json').write_text(json.dumps({
-                'steps': 2, 'frozen_vlm_unchanged': True, 'frozen_vlm_ema_unchanged': True,
-                'all_expert_gradients_nonzero': True, 'checkpoint_assets_verified': True,
-                'timestamp': time.time()}) + '\n')
+            (cfg.checkpoint_dir / 'smoke_passed.json').write_text(json.dumps(
+                {'steps': 2, 'gradients': 'shared VLM and all six experts nonzero and finite',
+                 'per_expert_assets_verified': True, 'timestamp': time.time()}) + '\n')
     finally:
         manager.wait_until_finished()
         manager.close()

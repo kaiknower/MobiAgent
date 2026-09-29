@@ -31,7 +31,7 @@ The paper link will be added here when available.
 
 ```text
 scripts/
-  robocasa/           RoboCasa entrypoints: infer, serve, train, train_joint
+  robocasa/           RoboCasa entrypoints: infer, serve, train
   data/               Demonstration segmentation and per-expert data splitting
 configs/
   robocasa/           RoboCasa dataset and policy-server templates
@@ -49,8 +49,7 @@ docs/                 RoboCasa workflow, BEHAVIOR setup and architecture
 | --- | --- | --- |
 | RoboCasa inference | [`scripts/robocasa/infer.py`](scripts/robocasa/infer.py) | [Inference setup](docs/robocasa.md#inference) |
 | RoboCasa policy server | [`scripts/robocasa/serve.py`](scripts/robocasa/serve.py) | [Serving a checkpoint](docs/robocasa.md#inference) |
-| RoboCasa training · frozen VLM | [`scripts/robocasa/train.py`](scripts/robocasa/train.py) | [Training setup](docs/robocasa.md#training) |
-| RoboCasa joint training | [`scripts/robocasa/train_joint.py`](scripts/robocasa/train_joint.py) | [Training setup](docs/robocasa.md#training) |
+| RoboCasa training · trainable VLM | [`scripts/robocasa/train.py`](scripts/robocasa/train.py) | [Training setup](docs/robocasa.md#training) |
 | BEHAVIOR execution and training | [`src/mobiagent/execution/`](src/mobiagent/execution/) · [`policy/openpi/scripts/`](policy/openpi/scripts/) | [Deployment](docs/deployment.md) · [Training](docs/training.md) |
 | Offline skill discovery | [`src/mobiagent/discovery/behavior/`](src/mobiagent/discovery/behavior/) | [Data preparation](docs/data.md) |
 
@@ -87,10 +86,6 @@ lists supported settings; it is a template, not automatically loaded.
 ## Citation
 
 Citation details will be added here when the final reference is available.
-
-## Acknowledgments
-
-The work has been supported by Hong Kong Research Grant Council - General Research Fund Scheme (Grant No. 17202422, 17212923, 17215025) Theme-based Research (Grant No.T45-701/22-R), and Strategic Topics Grant (Grant No.STG3/E-605/25-N). Part of the described research work is conducted in the JC STEM Lab of Robotics for Soft Materials funded by The Hong Kong Jockey Club Charities Trust.
 
 ## License and release status
 
