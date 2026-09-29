@@ -1,7 +1,8 @@
 # Data preparation
 
 Use the BEHAVIOR skill-discovery pipeline to process demonstration videos and
-construct per-expert training segments.
+construct per-expert training segments. Both stages are covered by the
+[MobiAgent Discovery skill](../skills/mobiagent-discovery/SKILL.md).
 
 ```bash
 pip install -e '.[discovery]'

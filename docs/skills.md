@@ -1,14 +1,13 @@
 # Agent skills
 
-MobiAgent exposes four repository-local workflow skills. Each package contains
+MobiAgent exposes three repository-local workflow skills. Each package contains
 `SKILL.md` with a name, selection description, inputs, commands and output checks,
 plus `agents/openai.yaml` with agent UI metadata.
 
 | Skill | Workflow | Implementation |
 | --- | --- | --- |
 | [mobiagent-execution](../skills/mobiagent-execution/SKILL.md) | Serve a checkpoint and execute a long-horizon simulation task | `src/mobiagent/execution/`, `scripts/robocasa/` |
-| [mobiagent-discovery](../skills/mobiagent-discovery/SKILL.md) | Annotate demonstration timelines and group skills | `src/mobiagent/discovery/behavior/` |
-| [mobiagent-data](../skills/mobiagent-data/SKILL.md) | Align annotations, build segments and split expert shards | `scripts/data/` |
+| [mobiagent-discovery](../skills/mobiagent-discovery/SKILL.md) | Discover skills, align annotations and export expert shards | `src/mobiagent/discovery/behavior/`, `scripts/data/` |
 | [mobiagent-training](../skills/mobiagent-training/SKILL.md) | Train or resume a policy | `scripts/robocasa/train.py`, `policy/openpi/` |
 
 ## Using a skill

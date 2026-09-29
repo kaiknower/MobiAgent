@@ -1,4 +1,4 @@
 interface:
   display_name: "MobiAgent Skill Discovery"
-  short_description: "Discover skills from BEHAVIOR demonstrations"
-  default_prompt: "Use $mobiagent-discovery to carry out the requested MobiAgent workflow."
+  short_description: "Discover skills and export expert training data"
+  default_prompt: "Use $mobiagent-discovery to discover BEHAVIOR skills or export training data from existing predictions."
