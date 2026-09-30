@@ -15,7 +15,7 @@
 
 [![Project Overview](https://img.shields.io/badge/Project-Overview-3366cc?style=plastic&logo=googlechrome&logoColor=white)](docs/overview.md)
 [![Paper: Coming soon](https://img.shields.io/badge/Paper-Coming_soon-b31b1b?style=plastic&logo=arxiv&logoColor=white)](#paper)
-[![Hugging Face Model Weights: Coming soon](https://img.shields.io/badge/Model_Weights-Coming_soon-ffcc4d?style=plastic&logo=huggingface)](#model-weights)
+[![Hugging Face Model Weights](https://img.shields.io/badge/Model_Weights-Hugging_Face-ffcc4d?style=plastic&logo=huggingface)](https://huggingface.co/Liukaikai/MobiAgent)
 
 <img src="docs/assets/framework.png" alt="MobiAgent dual-loop architecture: deployment through planning, skill execution and reflection, and offline policy evolution through skill discovery and training" width="100%">
 
@@ -29,7 +29,10 @@ The paper link will be added here when available.
 
 ## Model weights
 
-Hugging Face checkpoints: coming soon.
+The [RoboCasa joint-training checkpoint at step 25,000](https://huggingface.co/Liukaikai/MobiAgent) includes model
+parameters, per-expert normalization assets, and training state. Request access
+on Hugging Face; downloads become available after manual approval. See the
+[download and inference guide](docs/robocasa.md#download-weights).
 
 ## Agent skills
 

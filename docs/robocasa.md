@@ -46,6 +46,28 @@ Fill in the six datasets, base parameters and normalization paths in `data.json`
 Use absolute asset paths. Install the matching RoboCasa/Groot dataset reader in
 the backend environment as well. Export the recipe variable in each backend shell.
 
+## Download weights
+
+The [MobiAgent RoboCasa checkpoint](https://huggingface.co/Liukaikai/MobiAgent)
+contains the jointly trained VLM and six action experts at step 25,000.
+Request access on Hugging Face, wait for approval, and sign in with `hf auth login`.
+
+Download the inference parameters and normalization assets:
+
+```bash
+hf download Liukaikai/MobiAgent \
+  --include 'params/**' --include 'assets/**' \
+  --include '_CHECKPOINT_METADATA' --include 'checkpoint_info.json' \
+  --local-dir checkpoints/robocasa-joint-25000
+```
+
+For the complete checkpoint, including training state, omit the `--include` filters.
+In `configs/robocasa/data.json`, point each expert's `norm_path` to the absolute
+path of its downloaded `assets/per_expert/<expert>/norm_stats.json`. Keep the
+six-expert order and `use_quantile_norm` setting consistent with the training recipe.
+Export `MOBIAGENT_ROBOCASA_RECIPE` as described above, then pass
+`checkpoints/robocasa-joint-25000` to the policy server's `--checkpoint` option.
+
 ## Inference
 
 First start the policy server with a trained checkpoint:
