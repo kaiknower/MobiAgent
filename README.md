@@ -110,4 +110,15 @@ lists supported settings; it is a template, not automatically loaded.
 
 ## Citation
 
-Citation details will be added here when the final reference is available.
+If you find MobiAgent useful in your research, please cite our paper:
+
+```bibtex
+@misc{liu2026mobiagent,
+  title={From Execution to Evolution: A Dual-Loop Agentic System for Long-Horizon Mobile Manipulation},
+  author={Chenzhi Liu and Zhang Yue and Jiehong Lin and Jianan Wang and Bo Wang and Zhongrui Wang and Xiaojuan Qi},
+  year={2026},
+  eprint={26xx.xxxxx}, % Replace with the final arXiv ID.
+  archivePrefix={arXiv},
+  primaryClass={cs.RO}
+}
+```
