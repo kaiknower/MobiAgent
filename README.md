@@ -13,7 +13,7 @@
 <sup>1</sup> The University of Hong Kong &nbsp; <sup>2</sup> Astribot &nbsp; <sup>3</sup> Southern University of Science and Technology<br>
 <sup>*</sup> Equal contribution &nbsp; <sup>†</sup> Project leader &nbsp; <sup>‡</sup> Corresponding authors
 
-[![Project Overview](https://img.shields.io/badge/Project-Overview-3366cc?style=plastic&logo=googlechrome&logoColor=white)](docs/overview.md)
+[![Project Overview](https://img.shields.io/badge/Project-Overview-3366cc?style=plastic&logo=googlechrome&logoColor=white)](https://kaiknower.github.io/mobiagent/)
 [![Paper: Coming soon](https://img.shields.io/badge/Paper-Coming_soon-b31b1b?style=plastic&logo=arxiv&logoColor=white)](#paper)
 [![Hugging Face Model Weights](https://img.shields.io/badge/Model_Weights-Hugging_Face-ffcc4d?style=plastic&logo=huggingface)](https://huggingface.co/Liukaikai/MobiAgent)
 
