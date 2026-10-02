@@ -1,6 +1,6 @@
 # MobiAgent
 
-**From Execution to Evolution: A Dual-Loop Agentic System for Long-Horizon Mobile Manipulation**
+**MobiAgent: Dual-Loop Recursive Policy Self-Improvement for Long-Horizon Mobile Manipulation**
 
 ![Framework](assets/framework.png)
 

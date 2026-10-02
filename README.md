@@ -5,7 +5,7 @@
   <img src="docs/assets/mobiagent-logo.svg" alt="MobiAgent" width="520">
 </picture>
 
-## From Execution to Evolution: A Dual-Loop Agentic System for Long-Horizon Mobile Manipulation
+## MobiAgent: Dual-Loop Recursive Policy Self-Improvement for Long-Horizon Mobile Manipulation
 
 [Chenzhi Liu](https://openreview.net/profile?id=~Chenzhi_Liu2)<sup>1,*</sup> · [Zhang Yue](https://openreview.net/profile?id=~Zhang_Yue_bolt1)<sup>1,*</sup> · [Jiehong Lin](https://openreview.net/profile?id=~Jiehong_Lin1)<sup>1,*,†</sup> · [Jianan Wang](https://openreview.net/profile?id=~Jianan_Wang2)<sup>2</sup><br>
 [Bo Wang](https://openreview.net/profile?id=~Bo_Wang36)<sup>1</sup> · [Zhongrui Wang](https://openreview.net/profile?id=~Zhongrui_Wang1)<sup>3,‡</sup> · [Xiaojuan Qi](https://openreview.net/profile?id=~Xiaojuan_Qi4)<sup>1,‡</sup>
@@ -114,7 +114,7 @@ If you find MobiAgent useful in your research, please cite our paper:
 
 ```bibtex
 @misc{liu2026mobiagent,
-  title={From Execution to Evolution: A Dual-Loop Agentic System for Long-Horizon Mobile Manipulation},
+  title={MobiAgent: Dual-Loop Recursive Policy Self-Improvement for Long-Horizon Mobile Manipulation},
   author={Chenzhi Liu and Zhang Yue and Jiehong Lin and Jianan Wang and Bo Wang and Zhongrui Wang and Xiaojuan Qi},
   year={2026},
   eprint={26xx.xxxxx}, % Replace with the final arXiv ID.
