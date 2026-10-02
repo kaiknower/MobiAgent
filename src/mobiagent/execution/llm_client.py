@@ -1,41 +1,30 @@
-"""Azure OpenAI client for MobiAgent planning and visual reflection.
+"""GPT API calls for MobiAgent planning and visual reflection.
 
-Set AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_DEPLOYMENT
-in the environment. AZURE_OPENAI_API_VERSION selects the Azure API version.
+Set OPENAI_API_KEY, OPENAI_BASE_URL and OPENAI_MODEL in the environment.
 """
 from __future__ import annotations
 
 import base64
 import io
 import json
-import os
 import time
 from typing import Any
 
-DEFAULT_API_VERSION = "2024-12-01-preview"
-DEFAULT_ENDPOINT = ""
-DEFAULT_DEPLOYMENT = ""
+from mobiagent.api import build_openai_client, get_openai_model, get_openai_settings
 
 
 _CLIENT_SINGLETON: Any = None
-# Set False once a deployment is observed to reject the `temperature` arg.
+# Set False once a model is observed to reject the `temperature` arg.
 _TEMPERATURE_SUPPORTED: bool = True
 
 
-def build_azure_client() -> Any:
-    """Reuse an Azure client and connection pool across planner and critic calls."""
+def build_client() -> Any:
+    """Reuse a GPT client and connection pool across planner and critic calls."""
     global _CLIENT_SINGLETON
     if _CLIENT_SINGLETON is not None:
         return _CLIENT_SINGLETON
-
-    from openai import AzureOpenAI
+    get_openai_settings()
     import httpx
-    api_key = os.getenv("AZURE_OPENAI_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("AZURE_OPENAI_API_KEY must be set")
-    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", DEFAULT_ENDPOINT).strip()
-    if not endpoint:
-        raise RuntimeError("AZURE_OPENAI_ENDPOINT must be set; see README.md#api-configuration")
 
     http_client = httpx.Client(
         # Wide keepalive pool — many idle connections kept warm so a chunk
@@ -45,18 +34,13 @@ def build_azure_client() -> Any:
             max_connections=40,
             keepalive_expiry=300.0,
         ),
-        # Generous read timeout — planner/judge calls on GPT-5.4 can take
-        # 10-30 s legitimately. We don't want short read timeouts to surface
-        # as "Connection error".
+        # Allow time for multimodal model responses.
         timeout=httpx.Timeout(connect=15.0, read=180.0, write=15.0, pool=15.0),
         # Disable httpx-level retries; we control retry policy explicitly.
         transport=httpx.HTTPTransport(retries=0),
     )
 
-    _CLIENT_SINGLETON = AzureOpenAI(
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION", DEFAULT_API_VERSION),
-        azure_endpoint=endpoint,
-        api_key=api_key,
+    _CLIENT_SINGLETON = build_openai_client(
         http_client=http_client,
         max_retries=0,  # SDK-level retries off; we use the loop below.
     )
@@ -99,7 +83,7 @@ def make_user_content(*, text: str, images: list[Any] | None = None) -> list[dic
 
 
 def _is_transient_exc(exc: Exception) -> bool:
-    """Decide if an Azure OpenAI exception is worth retrying.
+    """Decide if an GPT API exception is worth retrying.
 
     Uses BOTH exception-class detection (preferred — covers exceptions whose
     `str()` doesn't include the HTTP code) AND string heuristics (fallback for
@@ -151,28 +135,16 @@ def chat_completion_json(
     *,
     system_text: str,
     user_content: list[dict[str, Any]],
-    deployment: str | None = None,
+    model: str | None = None,
     max_completion_tokens: int = 16384,
     max_attempts: int = 2,
 ) -> dict[str, Any]:
-    """Call Azure OpenAI chat completion with JSON response_format.
+    """Call the configured GPT model and parse its JSON response.
 
-    Connection stability is achieved primarily via the singleton client +
-    keepalive pool in `build_azure_client()`. The retry loop is a thin
-    safety net: ONE fast retry on transient errors (connection blip, 5xx,
-    429, timeout). No exponential backoff — if the singleton is healthy a
-    second attempt usually succeeds within ~2 s; if not, the underlying
-    issue is bigger than retries can paper over.
-
-    On a transient retry, the singleton client is INVALIDATED so the next
-    call rebuilds the httpx pool — useful when an Azure LB instance dropped
-    the keepalive connections behind it.
-
-    Returns the parsed JSON object from the model's reply.
+    Reuse the SDK connection pool and retry transient transport errors.
+    A retry rebuilds the client to discard stale connections.
     """
-    deployment = deployment or os.getenv("AZURE_OPENAI_DEPLOYMENT", DEFAULT_DEPLOYMENT)
-    if not deployment.strip():
-        raise RuntimeError("AZURE_OPENAI_DEPLOYMENT must be set; use the deployment name from your Azure resource")
+    model = get_openai_model(model)
 
     messages = [
         {"role": "system", "content": system_text},
@@ -182,12 +154,12 @@ def chat_completion_json(
     last_exc: Exception | None = None
     for attempt in range(max_attempts):
         try:
-            client = build_azure_client()
+            client = build_client()
             # temperature=0 → greedy/deterministic: the SAME frames must give the
-            # SAME verdict (no sampling jitter). Some reasoning-style deployments
+            # SAME verdict (no sampling jitter). Some reasoning-style models
             # reject `temperature`; if so, drop it for the rest of the session.
             create_kwargs: dict[str, Any] = dict(
-                model=deployment,
+                model=model,
                 messages=messages,
                 response_format={"type": "json_object"},
                 max_completion_tokens=max_completion_tokens,
@@ -201,7 +173,7 @@ def chat_completion_json(
                 if _TEMPERATURE_SUPPORTED and "temperature" in str(exc_t).lower():
                     _TEMPERATURE_SUPPORTED = False
                     create_kwargs.pop("temperature", None)
-                    print("  llm: deployment rejects `temperature`; "
+                    print("  llm: model rejects `temperature`; "
                           "dropping it for the rest of the session", flush=True)
                     resp = client.chat.completions.create(**create_kwargs)
                 else:
@@ -214,7 +186,7 @@ def chat_completion_json(
             if not transient or attempt == max_attempts - 1:
                 raise
             # Invalidate the singleton — a wedged keepalive pool stays wedged
-            # if we keep reusing it. Next build_azure_client() creates a fresh
+            # if we keep reusing it. Next build_client() creates a fresh
             # httpx Client.
             global _CLIENT_SINGLETON
             try:
@@ -230,7 +202,7 @@ def chat_completion_json(
 
 
 __all__ = [
-    "build_azure_client",
+    "build_client",
     "chat_completion_json",
     "make_user_content",
 ]

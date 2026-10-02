@@ -9,8 +9,7 @@ Linux environment. The adapter uses the BEHAVIOR `gello` simulation configuratio
 helpers. Start a policy server using the [training guide](training.md), then set
 its address in `configs/policy_servers.yaml`.
 
-Export `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, and
-`AZURE_OPENAI_DEPLOYMENT` in the agent environment. Supply the task instruction:
+Export `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL` in the agent environment. Supply the task instruction:
 
 ```bash
 mobiagent --env omni --task task-0001 --instruction 'YOUR TASK INSTRUCTION' \

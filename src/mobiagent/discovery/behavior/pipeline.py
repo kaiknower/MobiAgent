@@ -8,7 +8,6 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-from .azure_client import DEFAULT_AZURE_OPENAI_API_KEY
 from .clustering import build_skill_description_items
 from .clustering import run_cluster_naming
 from .clustering import summarize_timeline_skill_descriptions
@@ -28,11 +27,11 @@ from .task_context import load_task_instruction
 
 DEFAULT_OUTPUT_ROOT = Path("outputs/discovery/behavior")
 MERGED_VIDEO_SAMPLE_COUNT = 10
-CLUSTER_NAMING_MODEL = "gpt-5.4"
+CLUSTER_NAMING_MODEL = os.getenv("MOBIAGENT_NAMING_MODEL", "").strip() or os.getenv("OPENAI_MODEL", "").strip()
 CLUSTER_NAMING_MAX_COMPLETION_TOKENS = 8192
 QWEN_FULL_VIDEO_MODEL = "qwen3.6-plus"
 DEFAULT_GEMINI_FULL_VIDEO_MODEL = "gemini-3.1-pro-preview"
-AZURE_FRAME_MODEL = "gpt-4.1-mini"
+GPT_FRAME_MODEL = os.getenv("MOBIAGENT_FRAME_MODEL", "").strip() or os.getenv("OPENAI_MODEL", "").strip()
 MAX_DASHSCOPE_DATA_URI_BYTES = 10 * 1024 * 1024
 DATA_VIDEO_MP4_BASE64_PREFIX_BYTES = len("data:video/mp4;base64,")
 VIDEO_PLAYBACK_TIME_SCALE = 5.0
@@ -89,8 +88,8 @@ def _has_gemini_api_key() -> bool:
     return bool(os.getenv("GEMINI_API_KEY", ""))
 
 
-def _has_azure_api_key() -> bool:
-    return os.getenv("AZURE_OPENAI_API_KEY", DEFAULT_AZURE_OPENAI_API_KEY) != ""
+def _has_openai_api_key() -> bool:
+    return bool(os.getenv("OPENAI_API_KEY", "").strip())
 
 
 def _has_video_inference_api_key() -> bool:
@@ -99,7 +98,7 @@ def _has_video_inference_api_key() -> bool:
 
 
 def _has_any_model_api_key() -> bool:
-    return _has_dashscope_api_key() or _has_gemini_api_key() or _has_azure_api_key()
+    return _has_dashscope_api_key() or _has_gemini_api_key() or _has_openai_api_key()
 
 
 def choose_inference_mode(
@@ -601,7 +600,7 @@ def _call_qwen_segment_resplit(
     model: str,
     max_completion_tokens: int,
 ) -> list[dict] | None:
-    from .azure_client import build_chat_completion_request, execute_chat_completion, extract_first_message_text
+    from .api_client import build_chat_completion_request, execute_chat_completion, extract_first_message_text
     prompt_text = _build_segment_resplit_prompt(segment, events, video_duration_sec)
     user_content = [
         {"type": "text", "text": prompt_text},
@@ -1297,11 +1296,11 @@ def _run_single_demo_prediction(
     )
     _append_pipeline_log(
         run_dir,
-        f"azure frame inference request start for {selected_demo.task_id}/{selected_demo.episode_id}",
+        f"GPT frame inference request start for {selected_demo.task_id}/{selected_demo.episode_id}",
     )
     prediction = run_full_video_inference(
         payload=payload,
-        model=AZURE_FRAME_MODEL,
+        model=GPT_FRAME_MODEL,
         max_completion_tokens=4096,
         frame_data_urls=frame_data_urls,
         prompt_artifact_dir=run_dir / "manifests" / "prompts" / selected_demo.task_id,
@@ -1323,7 +1322,7 @@ def _run_single_demo_prediction(
     )
     _append_pipeline_log(
         run_dir,
-        f"azure frame inference request finish for {selected_demo.task_id}/{selected_demo.episode_id}",
+        f"GPT frame inference request finish for {selected_demo.task_id}/{selected_demo.episode_id}",
     )
     prediction.setdefault("task_id", selected_demo.task_id)
     prediction.setdefault("episode_id", selected_demo.episode_id)
@@ -1492,7 +1491,7 @@ def write_demo_skill_outputs(
         "cluster_summary_path": str(cluster_summary_path),
         "semantic_skill_items_path": str(semantic_skill_items_path),
     }
-    if not _has_azure_api_key():
+    if not _has_openai_api_key():
         outputs["cluster_naming_status"] = "skipped_no_api_key"
         return outputs
 

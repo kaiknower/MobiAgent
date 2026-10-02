@@ -6,9 +6,9 @@ import json
 from copy import deepcopy
 from pathlib import Path
 
-from mobiagent.discovery.behavior.azure_client import build_chat_completion_request
-from mobiagent.discovery.behavior.azure_client import execute_chat_completion
-from mobiagent.discovery.behavior.azure_client import extract_first_message_text
+from mobiagent.discovery.behavior.api_client import build_chat_completion_request
+from mobiagent.discovery.behavior.api_client import execute_chat_completion
+from mobiagent.discovery.behavior.api_client import extract_first_message_text
 
 
 def validate_timeline_prediction(payload: dict) -> dict:
@@ -575,7 +575,7 @@ def build_full_video_request(
     )
 
 def build_frame_fallback_request(
-    deployment: str,
+    model: str,
     payload: dict,
     frame_summaries: list[str],
     max_completion_tokens: int = 4096,
@@ -586,7 +586,7 @@ def build_frame_fallback_request(
         sort_keys=True,
     )
     return build_chat_completion_request(
-        model=deployment,
+        model=model,
         messages=[{"role": "user", "content": user_content}],
         max_completion_tokens=max_completion_tokens,
     )

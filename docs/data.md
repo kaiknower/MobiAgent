@@ -16,7 +16,7 @@ mobiagent-discover --platform behavior --dataset-root /path/to/behavior \
 
 The pipelines align video, robot state and actions, call a configured
 multimodal provider, and generate skill descriptions and segment annotations.
-They support Azure OpenAI and Gemini; supply your own credentials. Inspect the
+They support the GPT API and Gemini; supply your own credentials. Inspect the
 returned status: a run with no configured API credentials does not perform model
 inference.
 

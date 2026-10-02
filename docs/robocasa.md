@@ -164,7 +164,7 @@ uv run --project policy/openpi scripts/robocasa/serve.py \
 ```
 
 Set the server host and port in `configs/robocasa/policy_servers.yaml`.
-Configure the planner and critic's Azure settings using
+Configure the planner and critic's GPT API settings using
 [API configuration](../README.md#api-configuration), then run in the simulator
 environment:
 

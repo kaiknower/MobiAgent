@@ -6,45 +6,15 @@ import urllib.error
 import urllib.request
 
 
-DEFAULT_AZURE_OPENAI_API_VERSION = "2024-12-01-preview"
-# Supply the Azure resource endpoint and key through environment variables.
-DEFAULT_AZURE_OPENAI_ENDPOINT = ""
-DEFAULT_AZURE_OPENAI_API_KEY = ""
+from mobiagent.api import build_openai_client, get_openai_model, get_openai_settings
+
+
 DEFAULT_DASHSCOPE_BASE_URL = "https://cn-hongkong.dashscope.aliyuncs.com/compatible-mode/v1"
 DEFAULT_DASHSCOPE_MODEL = "qwen3.6-plus-2026-04-02"
 _LEGACY_QWEN_MODEL = "qwen3-vl-plus"
 DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 _HTTP_RETRY_DELAYS_SEC = (1.0, 2.0, 4.0)
-
-
-def build_azure_openai_client() -> Any:
-    from openai import AzureOpenAI
-
-    api_key = os.getenv("AZURE_OPENAI_API_KEY", DEFAULT_AZURE_OPENAI_API_KEY)
-    if api_key == "":
-        raise ValueError("AZURE_OPENAI_API_KEY must be set to a non-empty value")
-    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", DEFAULT_AZURE_OPENAI_ENDPOINT).strip()
-    if not endpoint:
-        raise ValueError("AZURE_OPENAI_ENDPOINT must be set; see README.md#api-configuration")
-
-    return AzureOpenAI(
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION", DEFAULT_AZURE_OPENAI_API_VERSION),
-        azure_endpoint=endpoint,
-        api_key=api_key,
-    )
-
-
-def _get_azure_openai_settings() -> tuple[str, str, str]:
-    api_key = os.getenv("AZURE_OPENAI_API_KEY", DEFAULT_AZURE_OPENAI_API_KEY)
-    if api_key == "":
-        raise ValueError("AZURE_OPENAI_API_KEY must be set to a non-empty value")
-
-    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", DEFAULT_AZURE_OPENAI_ENDPOINT).rstrip("/")
-    if not endpoint:
-        raise ValueError("AZURE_OPENAI_ENDPOINT must be set; see README.md#api-configuration")
-    api_version = os.getenv("AZURE_OPENAI_API_VERSION", DEFAULT_AZURE_OPENAI_API_VERSION)
-    return endpoint, api_version, api_key
 
 
 def _get_dashscope_settings() -> tuple[str, str, str]:
@@ -64,11 +34,9 @@ def _get_dashscope_settings() -> tuple[str, str, str]:
 
 
 def _execute_chat_completion_via_rest(request: dict[str, Any]) -> dict[str, Any]:
-    endpoint, api_version, api_key = _get_azure_openai_settings()
-    deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "").strip()
-    if not deployment:
-        raise ValueError("AZURE_OPENAI_DEPLOYMENT must be set to your Azure deployment name")
-    url = f"{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={api_version}"
+    api_key, base_url = get_openai_settings()
+    request = {**request, "model": get_openai_model(request.get("model"))}
+    url = f"{base_url}/chat/completions"
     payload = json.dumps(request).encode("utf-8")
     last_error: Exception | None = None
     for attempt, delay_sec in enumerate((0.0, *_HTTP_RETRY_DELAYS_SEC)):
@@ -79,7 +47,7 @@ def _execute_chat_completion_via_rest(request: dict[str, Any]) -> dict[str, Any]
             data=payload,
             headers={
                 "Content-Type": "application/json",
-                "api-key": api_key,
+                "Authorization": f"Bearer {api_key}",
             },
             method="POST",
         )
@@ -94,7 +62,7 @@ def _execute_chat_completion_via_rest(request: dict[str, Any]) -> dict[str, Any]
             detail = f"{exc.code} {exc.reason}"
             if error_body:
                 detail = f"{detail} body={error_body}"
-            raise RuntimeError(f"Azure REST request failed: {detail}") from exc
+            raise RuntimeError(f"GPT API request failed: {detail}") from exc
         except urllib.error.URLError as exc:
             last_error = exc
             continue
@@ -217,33 +185,32 @@ def execute_chat_completion_with_provider(
     client: Any | None = None,
     provider: str = "auto",
 ) -> dict[str, Any]:
+    if provider not in {"auto", "openai", "gemini", "dashscope"}:
+        raise ValueError(f"Unsupported API provider: {provider!r}")
     if client is None:
         if provider == "gemini":
             return _execute_chat_completion_via_gemini_rest(request)
         if provider == "dashscope":
             return _execute_chat_completion_via_dashscope_rest(request)
-        if provider == "azure":
-            try:
-                chat_client = build_azure_openai_client()
-            except ImportError:
-                return _execute_chat_completion_via_rest(request)
-        elif str(request.get("model", "")).startswith("gemini") and os.getenv("GEMINI_API_KEY", ""):
-            return _execute_chat_completion_via_gemini_rest(request)
-        elif os.getenv("DASHSCOPE_API_KEY", "") or os.getenv("ALIBABA_API_KEY", ""):
-            return _execute_chat_completion_via_dashscope_rest(request)
-        else:
-            try:
-                chat_client = build_azure_openai_client()
-            except ImportError:
-                return _execute_chat_completion_via_rest(request)
+        request_model = str(request.get("model", ""))
+        if provider == "auto":
+            if request_model.startswith("gemini") and os.getenv("GEMINI_API_KEY", ""):
+                return _execute_chat_completion_via_gemini_rest(request)
+            if request_model.startswith("qwen") and (
+                os.getenv("DASHSCOPE_API_KEY", "") or os.getenv("ALIBABA_API_KEY", "")
+            ):
+                return _execute_chat_completion_via_dashscope_rest(request)
+            if not request_model.startswith("gpt") and not os.getenv("OPENAI_API_KEY", ""):
+                if os.getenv("DASHSCOPE_API_KEY", "") or os.getenv("ALIBABA_API_KEY", ""):
+                    return _execute_chat_completion_via_dashscope_rest(request)
+        request = {**request, "model": get_openai_model(request.get("model"))}
+        try:
+            chat_client = build_openai_client()
+        except ImportError:
+            return _execute_chat_completion_via_rest(request)
     else:
         chat_client = client
 
-    if client is None:
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "").strip()
-        if not deployment:
-            raise ValueError("AZURE_OPENAI_DEPLOYMENT must be set to your Azure deployment name")
-        request = {**request, "model": deployment}
     response = chat_client.chat.completions.create(**request)
     if hasattr(response, "model_dump"):
         return response.model_dump()
@@ -255,13 +222,10 @@ def parse_chat_completion_response(response: dict[str, Any]) -> str:
 
 
 __all__ = [
-    "DEFAULT_AZURE_OPENAI_API_KEY",
-    "DEFAULT_AZURE_OPENAI_API_VERSION",
-    "DEFAULT_AZURE_OPENAI_ENDPOINT",
     "DEFAULT_GEMINI_BASE_URL",
     "DEFAULT_GEMINI_MODEL",
     "build_chat_completion_request",
-    "build_azure_openai_client",
+    "build_openai_client",
     "execute_chat_completion",
     "execute_chat_completion_with_provider",
     "extract_first_message_text",

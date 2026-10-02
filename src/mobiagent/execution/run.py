@@ -4,7 +4,7 @@ Modes (one of):
   --dry-run         : ask the planner for ONE subtask and exit
   --mock-all        : full Orchestrator loop with mock policy + mock planner +
                       mock judge
-  (default)         : full execution with a policy server, Azure OpenAI and a simulator
+  (default)         : full execution with a policy server, a configured GPT API and a simulator
 
 Mock judge rules (selectable via --mock-judge):
   always_complete   : every chunk is judged 'complete' (planner walks forward)
@@ -207,7 +207,7 @@ def main(argv=None, *, default_env="mock", default_policy_servers=None) -> int:
         else:
             registry = PolicyRegistry.from_yaml(Path(args.policy_servers))
         from .judge_vlm import judge as judge_real
-        planner_fn = next_subtask  # the real Azure planner
+        planner_fn = next_subtask  # the GPT planner
 
         def judge_fn(**kwargs):
             return judge_real(**kwargs)

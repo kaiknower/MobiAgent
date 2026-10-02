@@ -21,7 +21,7 @@ outcome is training-ready data from raw demonstrations.
 
 - BEHAVIOR dataset root containing `videos/`, `data/`, and `meta/`.
 - Task IDs to process and an output root.
-- Configured Azure OpenAI or Gemini provider credentials.
+- Configured GPT API or Gemini credentials; see [API configuration](../../README.md#api-configuration).
 
 ### Workflow
 

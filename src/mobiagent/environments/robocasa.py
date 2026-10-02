@@ -1,4 +1,4 @@
-"""RoboCasa camera/state/action adapter, extracted from the A100 deployment stack."""
+"""RoboCasa camera, state and action adapter for simulation execution."""
 from __future__ import annotations
 import random
 import numpy as np

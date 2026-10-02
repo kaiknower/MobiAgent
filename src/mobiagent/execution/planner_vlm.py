@@ -1,7 +1,7 @@
 """Reactive VLM planner — emits ONE subtask at a time.
 
-Provider: Azure OpenAI. Set AZURE_OPENAI_DEPLOYMENT to your deployment name.
-CLAW_PLANNER_MODEL optionally selects a different planner deployment.
+Set OPENAI_MODEL to the GPT model to call.
+MOBIAGENT_PLANNER_MODEL optionally overrides the planner model.
 
 Contract:
 
@@ -10,7 +10,7 @@ Contract:
         completed_subtasks=[],
         last_failed=None,         # (stage_hint, prompt, last_reason) | None
         head_image=None,
-        deployment=None,
+        model=None,
     ) -> Subtask
 
 ALWAYS returns a Subtask. The planner does NOT decide task termination —
@@ -206,7 +206,7 @@ def next_subtask(
     sim_task_name: str,
     history: list[dict] | None = None,
     head_image: Any | None = None,
-    deployment: str | None = None,
+    model: str | None = None,
 ) -> Subtask:
     """Ask the VLM for the NEXT subtask. ALWAYS returns a Subtask.
 
@@ -222,7 +222,7 @@ def next_subtask(
     will then mark complete or incomplete).
     """
     history = history or []
-    deployment = deployment or os.getenv("CLAW_PLANNER_MODEL") or os.getenv("AZURE_OPENAI_DEPLOYMENT")
+    model = model or os.getenv("MOBIAGENT_PLANNER_MODEL") or os.getenv("OPENAI_MODEL")
 
     fallback_id = f"subtask-{len(history) + 1:03d}"
     # `sim_task_name` is kept as a function parameter for vocab/log lookup but
@@ -242,7 +242,7 @@ def next_subtask(
             "No markdown, no commentary outside the JSON."
         ),
         user_content=make_user_content(text=user_text, images=images),
-        deployment=deployment,
+        model=model,
     )
 
     try:
@@ -259,7 +259,7 @@ def build_dynamic_plan(
     sim_task_name: str,
     scene_obs: dict[str, Any] | None = None,
     head_image: Any | None = None,
-    deployment: str | None = None,
+    model: str | None = None,
     cache_path: Path | None = None,
 ) -> "DynamicPlan":  # noqa: F821  (forward ref)
     """Request one subtask and wrap it in a DynamicPlan."""
@@ -274,7 +274,7 @@ def build_dynamic_plan(
 
     st = next_subtask(
         global_goal=global_goal, sim_task_name=sim_task_name,
-        head_image=head_image, deployment=deployment,
+        head_image=head_image, model=model,
     )
     plan = DynamicPlan(
         global_goal=global_goal,

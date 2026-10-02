@@ -1,4 +1,4 @@
-"""Visual reflection critic shared by the clean deployment loop."""
+"""Visual reflection critic shared by the clean model loop."""
 from __future__ import annotations
 import json
 import os
@@ -12,7 +12,7 @@ def judge(*, subtask: Subtask, obs_after: dict[str, Any],
           obs_mid: dict[str, Any] | None = None,
           robot_info: dict[str, Any] | None = None,
           history: list[Attempt], plan: DynamicPlan, current_idx: int,
-          deployment: str | None = None) -> JudgeDecision:
+          model: str | None = None) -> JudgeDecision:
     """Judge visible evidence without task-specific success rules or simulator probes."""
     images = []
     labels = []
@@ -45,7 +45,7 @@ def judge(*, subtask: Subtask, obs_after: dict[str, Any],
             '(complete/incomplete/error), reason, evidence (a list of visible cues), '
             'and recommended_followup (next/retry/replan_keep_pose).'),
         user_content=make_user_content(text=text, images=images or None),
-        deployment=deployment or os.getenv('MOBIAGENT_JUDGE_MODEL') or os.getenv('AZURE_OPENAI_DEPLOYMENT'),
+        model=model or os.getenv('MOBIAGENT_JUDGE_MODEL') or os.getenv('OPENAI_MODEL'),
         max_completion_tokens=4096,
     )
     verdict = str(result.get('verdict', '')).lower().strip()

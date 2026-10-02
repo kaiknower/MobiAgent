@@ -149,17 +149,24 @@ set +a
 
 | Variable in `.env` | Used for | Value to provide |
 | --- | --- | --- |
-| `AZURE_OPENAI_API_KEY` | Planner, visual critic and BEHAVIOR skill naming | Your Azure OpenAI API key |
-| `AZURE_OPENAI_ENDPOINT` | Azure requests | Your resource endpoint, e.g. `https://YOUR-RESOURCE.openai.azure.com/` |
-| `AZURE_OPENAI_DEPLOYMENT` | Planner and visual critic | Your Azure deployment name |
-| `AZURE_OPENAI_API_VERSION` | Azure requests | API version supported by your deployment |
+| `OPENAI_API_KEY` | GPT planning, visual reflection and BEHAVIOR skill naming | Your API key |
+| `OPENAI_BASE_URL` | GPT API connection | Your API base URL including `/v1`, e.g. `https://api.openai.com/v1` |
+| `OPENAI_MODEL` | GPT requests | A model supporting image inputs and JSON output |
 | `GEMINI_API_KEY` | BEHAVIOR video skill discovery | Your Gemini API key |
 | `DASHSCOPE_API_KEY` | Optional alternative video discovery provider | Your DashScope API key |
 
-The application reads these settings from environment variables. API keys and
-Azure resource endpoints have no embedded values in the source code. `.env` is
-excluded from Git. Policy training uses demonstration data and base model weights;
-provider credentials are needed for live planning, reflection and skill discovery.
+Set the three `OPENAI_*` values in `.env` before making GPT requests.
+Optional `MOBIAGENT_PLANNER_MODEL`, `MOBIAGENT_JUDGE_MODEL`,
+`MOBIAGENT_FRAME_MODEL`, and `MOBIAGENT_NAMING_MODEL` override the model for
+individual stages. Blank overrides use `OPENAI_MODEL`.
+
+The connection is configured in [`src/mobiagent/api.py`](src/mobiagent/api.py).
+GPT request calls are in [`execution/llm_client.py`](src/mobiagent/execution/llm_client.py)
+and [`discovery/behavior/api_client.py`](src/mobiagent/discovery/behavior/api_client.py).
+The API key, base URL and model are empty in the template; fill them with
+your own settings. `.env` is excluded from Git. Training uses demonstration
+data and base model weights; provider credentials are used for planning,
+reflection and skill discovery.
 
 - [BEHAVIOR and RoboCasa deployment](docs/deployment.md)
 - [Offline skill discovery and data preparation](docs/data.md)

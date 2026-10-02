@@ -3,10 +3,10 @@ import re
 from collections import defaultdict
 from collections.abc import Iterable
 
-from mobiagent.discovery.behavior.azure_client import build_chat_completion_request
-from mobiagent.discovery.behavior.azure_client import execute_chat_completion
-from mobiagent.discovery.behavior.azure_client import execute_chat_completion_with_provider
-from mobiagent.discovery.behavior.azure_client import extract_first_message_text
+from mobiagent.discovery.behavior.api_client import build_chat_completion_request
+from mobiagent.discovery.behavior.api_client import execute_chat_completion
+from mobiagent.discovery.behavior.api_client import execute_chat_completion_with_provider
+from mobiagent.discovery.behavior.api_client import extract_first_message_text
 
 
 class MissingClusterItemIdsError(ValueError):
@@ -655,7 +655,7 @@ def run_cluster_naming(
         model=model,
         max_completion_tokens=max_completion_tokens,
     )
-    response = execute_chat_completion_with_provider(request, client=client, provider="azure")
+    response = execute_chat_completion_with_provider(request, client=client, provider="openai")
     named_clusters = parse_named_clusters_response_text(extract_first_message_text(response))
     try:
         validated = _validate_named_clusters(named_clusters, items)
@@ -667,7 +667,7 @@ def run_cluster_naming(
             model=model,
             max_completion_tokens=max_completion_tokens,
         )
-        retry_response = execute_chat_completion_with_provider(retry_request, client=client, provider="azure")
+        retry_response = execute_chat_completion_with_provider(retry_request, client=client, provider="openai")
         retry_named_clusters = parse_named_clusters_response_text(extract_first_message_text(retry_response))
         try:
             validated = _validate_named_clusters(retry_named_clusters, items)
