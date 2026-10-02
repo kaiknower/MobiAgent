@@ -1,14 +1,7 @@
-"""Schemas for the DIMOS-free behavior-1k eval runner.
+"""Typed subtask plans, runtime memory and planner/critic decisions.
 
-Subtask -> DynamicPlan -> RunMemory + PlannerDecision/JudgeDecision are the
-five types that flow between the orchestrator, VLM planner, VLM judge, and the
-6-ckpt-server routing layer.
-
-Compared to dimos_pi0_5GT/schemas.py:
-  - PlannerDecision now references subtask_id (plan-list index) instead of monotonic stage
-  - JudgeDecision adds 'replan_plan_deviated' as a recommended_followup
-  - Subtask carries stage_hint (one of 6 canonicals) for ckpt routing
-  - DynamicPlan carries plan_revision; bumps each replan
+Subtasks carry a stage_hint for expert routing. Plans track plan_revision
+to distinguish updates after replanning.
 """
 from __future__ import annotations
 

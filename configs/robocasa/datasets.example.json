@@ -1,0 +1,83 @@
+{
+  "source": "human",
+  "split": "pretrain",
+  "skills": {
+    "close": [
+      "CloseBlenderLid",
+      "CloseCabinet",
+      "CloseDishwasher",
+      "CloseDrawer",
+      "CloseElectricKettleLid",
+      "CloseFridge",
+      "CloseFridgeDrawer",
+      "CloseMicrowave",
+      "CloseOven",
+      "CloseStandMixerHead",
+      "CloseToasterOvenDoor"
+    ],
+    "open": [
+      "OpenBlenderLid",
+      "OpenCabinet",
+      "OpenDishwasher",
+      "OpenDrawer",
+      "OpenElectricKettleLid",
+      "OpenFridge",
+      "OpenFridgeDrawer",
+      "OpenMicrowave",
+      "OpenOven",
+      "OpenStandMixerHead",
+      "OpenToasterOvenDoor"
+    ],
+    "switch": [
+      "AdjustToasterOvenTemperature",
+      "AdjustWaterTemperature",
+      "PreheatOven",
+      "StartCoffeeMachine",
+      "TurnOffMicrowave",
+      "TurnOffSinkFaucet",
+      "TurnOffStove",
+      "TurnOnBlender",
+      "TurnOnElectricKettle",
+      "TurnOnMicrowave",
+      "TurnOnSinkFaucet",
+      "TurnOnStove",
+      "TurnOnToaster",
+      "TurnOnToasterOven"
+    ],
+    "manipulate": [
+      "SlideDishwasherRack",
+      "SlideOvenRack",
+      "SlideToasterOvenRack",
+      "TurnSinkSpout",
+      "MakeIcedCoffee",
+      "CheesyBread",
+      "LowerHeat",
+      "PackDessert"
+    ],
+    "navigate": [
+      "NavigateKitchen"
+    ],
+    "pnp": [
+      "CoffeeServeMug",
+      "CoffeeSetupMug",
+      "PickPlaceCabinetToCounter",
+      "PickPlaceCounterToBlender",
+      "PickPlaceCounterToCabinet",
+      "PickPlaceCounterToDrawer",
+      "PickPlaceCounterToMicrowave",
+      "PickPlaceCounterToOven",
+      "PickPlaceCounterToSink",
+      "PickPlaceCounterToStandMixer",
+      "PickPlaceCounterToStove",
+      "PickPlaceCounterToToasterOven",
+      "PickPlaceDrawerToCounter",
+      "PickPlaceFridgeDrawerToShelf",
+      "PickPlaceFridgeShelfToDrawer",
+      "PickPlaceMicrowaveToCounter",
+      "PickPlaceSinkToCounter",
+      "PickPlaceStoveToCounter",
+      "PickPlaceToasterOvenToCounter",
+      "PickPlaceToasterToCounter"
+    ]
+  }
+}

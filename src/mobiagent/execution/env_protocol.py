@@ -1,8 +1,6 @@
-"""Abstract env interface — keeps orchestrator independent of OmniGibson/DIMOS.
+"""Shared simulator interface for mock, BEHAVIOR and RoboCasa environments.
 
-Step 6a uses MockEnv only. Step 6b will provide OmniGibsonEnv against this same
-protocol. The orchestrator (Step 7) does not import either implementation
-directly — it goes through env_factory.make_env(kind=...).
+The orchestrator uses this protocol through env_factory.make_env.
 """
 from __future__ import annotations
 

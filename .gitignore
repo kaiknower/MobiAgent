@@ -16,10 +16,13 @@ configs/robocasa/policy_servers.yaml
 /runs/
 /logs/
 /results/
+/claw_timing.json
 **/wandb/
 **/.cache/
 **/checkpoints/
 **/assets/norm_stats.json
+/assets/robocasa/
+configs/robocasa/datasets.json
 *.log
 *.jsonl
 *.parquet

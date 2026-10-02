@@ -1,7 +1,7 @@
 """Split segments.jsonl into 6 per-canonical-head shards + sampler weights.
 
-Per plan Step 4:
-  - Drop n_frames < 5 (already 0 in current data)
+Filtering and output:
+  - Drop n_frames < 5
   - Drop skill_canonical == "other" (filler noise)
   - One JSONL per head: head__{move_to,pick_up_from,place_in,place_on,open,close}.jsonl
   - sampler_weights.json keyed by sample_id, weight = (1 / class_count[head]) ** alpha

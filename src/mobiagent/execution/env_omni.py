@@ -1,27 +1,11 @@
-"""Real OmniGibson environment for behavior-1k eval — DIMOS-free.
+"""OmniGibson environment adapter for BEHAVIOR-1K.
 
-Implements `EnvProtocol`. Wraps `omnigibson.Environment` directly. The env
-config + robot config follow the proven recipe from
-  behavior-1k-solution/dimos_pi0_5GT/connection.py:243-251
+Implements EnvProtocol using OmniGibson and BEHAVIOR gello configuration helpers.
+The R1Pro robot provides the 256-dimensional proprioceptive layout used by the
+policy. Runtime requires BEHAVIOR-1K, OmniGibson, Isaac Sim and simulator assets.
+Initialize Isaac Sim before reset and set OMNI_KIT_ACCEPT_EULA=YES.
 
-i.e. uses gello's `generate_basic_environment_config` + `generate_robot_config`
-(both pure helpers, no DIMOS imports) plus the explicit
-`PROPRIOCEPTION_INDICES["R1Pro"]` proprio_obs list so the robot emits the same
-256-d proprio layout the training data was collected with.
-
-Required runtime:
-  - omnigibson + isaacsim installed (e.g. inside `behavior-1k-solution/.venv`
-    or the conda behavior env)
-  - GPU + Isaac Sim assets ready
-  - `import isaacsim` BEFORE this module's reset() — sets ISAAC_PATH/EXP_PATH
-  - env vars: OMNI_KIT_ACCEPT_EULA=YES; recommended: TORCH_COMPILE_DISABLE=1,
-    TORCHDYNAMO_DISABLE=1, TORCHINDUCTOR_COMPILE_THREADS=0 to avoid torch
-    inductor segfaults on shutdown.
-
-This module is GPU-heavy on first reset() (~30s+).
-
-Task name convention: callers pass our `task-XXXX` IDs; we translate to
-BEHAVIOR activity names via the embedded `TASK_TO_ACTIVITY` map.
+Task IDs are translated to activity names through TASK_TO_ACTIVITY.
 """
 from __future__ import annotations
 

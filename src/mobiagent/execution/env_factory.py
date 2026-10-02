@@ -1,7 +1,6 @@
-"""Single point of env construction.
+"""Construct the selected mock, BEHAVIOR or RoboCasa environment.
 
-`make_env('mock')`  → in-process MockEnv (cheap, dev-time)
-`make_env('omni')`  → real OmniGibsonEnv (heavy; lazy-loads on first reset)
+Simulator dependencies are imported only when that environment is selected.
 """
 from __future__ import annotations
 

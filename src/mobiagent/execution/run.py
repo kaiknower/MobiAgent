@@ -1,10 +1,10 @@
 """CLI entry: `python -m mobiagent.execution.run --task task-0001 ...`
 
 Modes (one of):
-  --dry-run         : ask the planner for ONE subtask and exit (Step 6a)
+  --dry-run         : ask the planner for ONE subtask and exit
   --mock-all        : full Orchestrator loop with mock policy + mock planner +
-                      mock judge (Step 7 dev-test)
-  (default)         : full eval — needs --policy-servers + Azure OpenAI + real env
+                      mock judge
+  (default)         : full execution with a policy server, Azure OpenAI and a simulator
 
 Mock judge rules (selectable via --mock-judge):
   always_complete   : every chunk is judged 'complete' (planner walks forward)

@@ -7,7 +7,7 @@ import urllib.request
 
 
 DEFAULT_AZURE_OPENAI_API_VERSION = "2024-12-01-preview"
-# Project-specific default endpoint for the Claw Azure deployment.
+# Supply the Azure resource endpoint and key through environment variables.
 DEFAULT_AZURE_OPENAI_ENDPOINT = ""
 DEFAULT_AZURE_OPENAI_API_KEY = ""
 DEFAULT_DASHSCOPE_BASE_URL = "https://cn-hongkong.dashscope.aliyuncs.com/compatible-mode/v1"
@@ -24,10 +24,13 @@ def build_azure_openai_client() -> Any:
     api_key = os.getenv("AZURE_OPENAI_API_KEY", DEFAULT_AZURE_OPENAI_API_KEY)
     if api_key == "":
         raise ValueError("AZURE_OPENAI_API_KEY must be set to a non-empty value")
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", DEFAULT_AZURE_OPENAI_ENDPOINT).strip()
+    if not endpoint:
+        raise ValueError("AZURE_OPENAI_ENDPOINT must be set; see README.md#api-configuration")
 
     return AzureOpenAI(
         api_version=os.getenv("AZURE_OPENAI_API_VERSION", DEFAULT_AZURE_OPENAI_API_VERSION),
-        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", DEFAULT_AZURE_OPENAI_ENDPOINT),
+        azure_endpoint=endpoint,
         api_key=api_key,
     )
 
@@ -38,6 +41,8 @@ def _get_azure_openai_settings() -> tuple[str, str, str]:
         raise ValueError("AZURE_OPENAI_API_KEY must be set to a non-empty value")
 
     endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", DEFAULT_AZURE_OPENAI_ENDPOINT).rstrip("/")
+    if not endpoint:
+        raise ValueError("AZURE_OPENAI_ENDPOINT must be set; see README.md#api-configuration")
     api_version = os.getenv("AZURE_OPENAI_API_VERSION", DEFAULT_AZURE_OPENAI_API_VERSION)
     return endpoint, api_version, api_key
 
@@ -60,7 +65,9 @@ def _get_dashscope_settings() -> tuple[str, str, str]:
 
 def _execute_chat_completion_via_rest(request: dict[str, Any]) -> dict[str, Any]:
     endpoint, api_version, api_key = _get_azure_openai_settings()
-    deployment = request["model"]
+    deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "").strip()
+    if not deployment:
+        raise ValueError("AZURE_OPENAI_DEPLOYMENT must be set to your Azure deployment name")
     url = f"{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={api_version}"
     payload = json.dumps(request).encode("utf-8")
     last_error: Exception | None = None
@@ -232,6 +239,11 @@ def execute_chat_completion_with_provider(
     else:
         chat_client = client
 
+    if client is None:
+        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "").strip()
+        if not deployment:
+            raise ValueError("AZURE_OPENAI_DEPLOYMENT must be set to your Azure deployment name")
+        request = {**request, "model": deployment}
     response = chat_client.chat.completions.create(**request)
     if hasattr(response, "model_dump"):
         return response.model_dump()

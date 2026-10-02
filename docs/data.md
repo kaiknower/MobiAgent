@@ -1,5 +1,8 @@
 # Data preparation
 
+For official RoboCasa downloads, normalization and training recipes, see
+[RoboCasa training data](robocasa.md#training-data).
+
 Use the BEHAVIOR skill-discovery pipeline to process demonstration videos and
 construct per-expert training segments. Both stages are covered by the
 [MobiAgent Discovery skill](../skills/mobiagent-discovery/SKILL.md).

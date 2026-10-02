@@ -14,33 +14,43 @@ from openpi.models.pi0_six_head_config import Pi0SixHeadConfig
 from openpi.shared import normalize
 from openpi.training.config import DataConfig, DataConfigFactory, ModelTransformFactory
 from openpi.training.transforms_normalize import PerExpertNormalize
+from openpi.training.robocasa_lerobot import ACTION_KEYS, CAMERAS, STATE_KEYS, RoboCasaLeRobotDataset
 
 SKILLS = ('close', 'open', 'switch', 'manipulate', 'navigate', 'pnp')
 BUDGETS = (30000, 30000, 35000, 30000, 25000, 45000)
 ROOT = Path(__file__).resolve().parents[4]
 RECIPE = Path(os.environ.get('MOBIAGENT_ROBOCASA_RECIPE', 'configs/robocasa/data.json'))
-STATE_KEYS = ('end_effector_position_relative', 'end_effector_rotation_relative',
-              'base_position', 'base_rotation', 'gripper_qpos')
-ACTION_KEYS = ('end_effector_position', 'end_effector_rotation', 'gripper_close',
-               'base_motion', 'control_mode')
-CAMERAS = {'base_0_rgb': 'robot0_agentview_left',
-           'left_wrist_0_rgb': 'robot0_eye_in_hand',
-           'right_wrist_0_rgb': 'robot0_agentview_right'}
 
 
 def counts_at(step):
     return tuple(8 if step < budget else 0 for budget in BUDGETS)
 
 
-def source_recipe():
-    report = json.loads(RECIPE.read_text())
+def source_recipe(*, validate_datasets=False):
+    path = Path(os.environ.get('MOBIAGENT_ROBOCASA_RECIPE', str(RECIPE))).expanduser()
+    if not path.is_file():
+        raise FileNotFoundError(f'Training recipe not found: {path}. Run scripts/robocasa/prepare_data.py first.')
+    report = json.loads(path.read_text())
     heads = report['skills']
     if set(heads) != set(SKILLS):
         raise ValueError(f'Recipe must define these skills: {SKILLS}')
     for name in SKILLS:
         for key in ('norm_path', 'base_params', 'data_dirs', 'batch_size', 'action_horizon', 'use_quantile_norm'):
             if key not in heads[name]:
-                raise ValueError(f'Missing {name}.{key} in {RECIPE}')
+                raise ValueError(f'Missing {name}.{key} in {path}')
+        if heads[name]['batch_size'] != 8 or heads[name]['action_horizon'] != 50:
+            raise ValueError(f'{name}: this trainer requires batch_size=8 and action_horizon=50')
+        if validate_datasets and not heads[name]['data_dirs']:
+            raise ValueError(f'No datasets configured for {name}')
+        if not Path(heads[name]['norm_path']).is_file():
+            raise FileNotFoundError(f'Missing {name} normalization: {heads[name]["norm_path"]}')
+        for entry in heads[name]['data_dirs'] if validate_datasets else ():
+            if not (Path(entry['path']) / 'meta/info.json').is_file():
+                raise FileNotFoundError(f'Missing {name} dataset: {entry["path"]}')
+    if len({heads[name]['base_params'] for name in SKILLS}) != 1:
+        raise ValueError('All six experts must use the same base checkpoint')
+    if len({heads[name]['use_quantile_norm'] for name in SKILLS}) != 1:
+        raise ValueError('All six experts must use the same normalization mode')
     return heads
 
 
@@ -81,40 +91,26 @@ def inputs(item, expert):
 
 
 class V3Dataset(torch.utils.data.Dataset):
-    """Existing Groot reader, with deterministic dataset/episode/frame sampling."""
+    """Official LeRobot data with deterministic dataset/episode/frame sampling."""
 
     def __init__(self, seed=42):
         self.seed = seed
-        self.recipe = source_recipe()
+        self.recipe = source_recipe(validate_datasets=True)
         self._pools = None
         self._transform = None
 
     def initialize(self):
         if self._pools is not None:
             return
-        from robocasa.utils.groot_utils.groot_dataset import LeRobotSingleDataset, ModalityConfig
-        from robocasa.utils.groot_utils.embodiment_tags import EmbodimentTag
-
         self._pools, self.probabilities = [], []
         for name in SKILLS:
             pool = []
             for entry in self.recipe[name]['data_dirs']:
                 path = Path(entry['path'])
-                # Never permit the upstream reader to regenerate metadata.
-                for filename in ('stats.json', 'info.json', 'modality.json', 'episodes.jsonl', 'tasks.jsonl'):
+                for filename in ('info.json', 'modality.json', 'episodes.jsonl', 'tasks.jsonl'):
                     assert (path / 'meta' / filename).is_file(), path / filename
-                meta = json.loads((path / 'meta/modality.json').read_text())
-                configs = {}
-                for modality in ('video', 'state', 'action', 'annotation'):
-                    keys = [modality + '.' + key for key in meta[modality]
-                            if modality + '.' + key != 'state.dummy_tensor']
-                    configs['language' if modality == 'annotation' else modality] = ModalityConfig(
-                        delta_indices=list(range(50)) if modality == 'action' else [0], modality_keys=keys)
-                pool.append(LeRobotSingleDataset(dataset_path=path, modality_configs=configs,
-                            embodiment_tag=EmbodimentTag.NEW_EMBODIMENT,
-                            video_backend='opencv', transforms=None,
-                            filter_key=entry['filter_key'], filter_key_seed=0))
-            weights = self.recipe[name]['dataset_weights']
+                pool.append(RoboCasaLeRobotDataset(path, filter_key=entry.get('filter_key'), filter_key_seed=0))
+            weights = self.recipe[name].get('dataset_weights')
             weights = np.asarray(weights if weights is not None else [len(ds)**0.4 for ds in pool],
                                  dtype=np.float64)
             assert len(weights) == len(pool) and np.all(weights > 0)

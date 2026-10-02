@@ -15,6 +15,7 @@
 
 [![Project Overview](https://img.shields.io/badge/Project-Overview-3366cc?style=plastic&logo=googlechrome&logoColor=white)](https://kaiknower.github.io/mobiagent/)
 [![Paper: Coming soon](https://img.shields.io/badge/Paper-Coming_soon-b31b1b?style=plastic&logo=arxiv&logoColor=white)](#paper)
+[![RoboCasa Training Dataset](https://img.shields.io/badge/Training_Data-RoboCasa-ffcc4d?style=plastic&logo=huggingface)](https://robocasa.ai/docs/build/html/datasets/datasets_overview.html)
 [![Hugging Face Model Weights](https://img.shields.io/badge/Model_Weights-Hugging_Face-ffcc4d?style=plastic&logo=huggingface)](https://huggingface.co/Liukaikai/MobiAgent)
 
 <img src="docs/assets/framework.png" alt="MobiAgent dual-loop architecture: deployment through planning, skill execution and reflection, and offline policy evolution through skill discovery and training" width="100%">
@@ -33,6 +34,39 @@ The [RoboCasa joint-training checkpoint at step 25,000](https://huggingface.co/L
 parameters, per-expert normalization assets, and training state. Request access
 on Hugging Face; downloads become available after manual approval. See the
 [download and inference guide](docs/robocasa.md#download-weights).
+
+## Training data
+
+RoboCasa training uses the [official RoboCasa human demonstration datasets](https://robocasa.ai/docs/build/html/datasets/datasets_overview.html).
+The [dataset selection](configs/robocasa/datasets.example.json) maps atomic tasks to
+`close`, `open`, `switch`, `manipulate`, `navigate`, and `pnp` experts.
+
+Run the downloader in the RoboCasa environment:
+
+```bash
+python scripts/robocasa/download_data.py --dataset-root datasets/robocasa
+```
+
+Datasets are stored under `datasets/robocasa/v1.0/pretrain/atomic/<Task>/<Version>/lerobot/`.
+The downloader writes `datasets/robocasa/datasets.json`, recording each task's
+expert and local path. In the GPU backend environment, compute normalization and
+create the training recipe:
+
+```bash
+uv sync --project policy/openpi
+uv run --project policy/openpi scripts/robocasa/prepare_data.py \
+  --manifest datasets/robocasa/datasets.json
+uv run --project policy/openpi scripts/robocasa/train.py \
+  --recipe configs/robocasa/data.json --check-data
+uv run --project policy/openpi scripts/robocasa/train.py \
+  --recipe configs/robocasa/data.json --exp-name my_run
+```
+
+Preparation saves normalization files in `assets/robocasa/<expert>/norm_stats.json`
+and records their absolute paths in `configs/robocasa/data.json`. Training updates
+the shared VLM and all six experts jointly and saves checkpoints under
+`checkpoints/robocasa/`. See the [RoboCasa setup and training guide](docs/robocasa.md#training-data)
+for environment requirements, dataset selection and custom paths.
 
 ## Agent skills
 
@@ -56,7 +90,7 @@ skills/                 Agent workflow packages (SKILL.md + agent metadata)
   mobiagent-discovery/  Skill discovery and training-data export
   mobiagent-training/   Policy training and checkpoint handoff
 scripts/
-  robocasa/           RoboCasa entrypoints: infer, serve, train
+  robocasa/           RoboCasa download, preparation, inference, serving and training
   data/               Demonstration segmentation and per-expert data splitting
 configs/
   robocasa/           RoboCasa dataset and policy-server templates
@@ -72,6 +106,8 @@ docs/                 Skill usage, benchmark setup and architecture
 
 | Workflow | Entry point | Guide |
 | --- | --- | --- |
+| RoboCasa data download | [`scripts/robocasa/download_data.py`](scripts/robocasa/download_data.py) | [Training data](docs/robocasa.md#training-data) |
+| RoboCasa preparation | [`scripts/robocasa/prepare_data.py`](scripts/robocasa/prepare_data.py) | [Normalization and recipe](docs/robocasa.md#prepare-the-training-recipe) |
 | RoboCasa inference | [`scripts/robocasa/infer.py`](scripts/robocasa/infer.py) | [Inference setup](docs/robocasa.md#inference) |
 | RoboCasa policy server | [`scripts/robocasa/serve.py`](scripts/robocasa/serve.py) | [Serving a checkpoint](docs/robocasa.md#inference) |
 | RoboCasa training · trainable VLM | [`scripts/robocasa/train.py`](scripts/robocasa/train.py) | [Training setup](docs/robocasa.md#training) |
@@ -99,9 +135,31 @@ mobiagent --env mock --mock-all --task example \
   --instruction 'Move an object into a container' --max-ticks 3
 ```
 
-For live planning and reflection, export your own `AZURE_OPENAI_API_KEY`,
-`AZURE_OPENAI_ENDPOINT`, and `AZURE_OPENAI_DEPLOYMENT`. The `.env.example` file
-lists supported settings; it is a template, not automatically loaded.
+## API configuration
+
+Copy [.env.example](.env.example) to `.env` and fill in your provider settings:
+
+```bash
+cp .env.example .env
+# Edit .env, then export its variables in the current shell.
+set -a
+source .env
+set +a
+```
+
+| Variable in `.env` | Used for | Value to provide |
+| --- | --- | --- |
+| `AZURE_OPENAI_API_KEY` | Planner, visual critic and BEHAVIOR skill naming | Your Azure OpenAI API key |
+| `AZURE_OPENAI_ENDPOINT` | Azure requests | Your resource endpoint, e.g. `https://YOUR-RESOURCE.openai.azure.com/` |
+| `AZURE_OPENAI_DEPLOYMENT` | Planner and visual critic | Your Azure deployment name |
+| `AZURE_OPENAI_API_VERSION` | Azure requests | API version supported by your deployment |
+| `GEMINI_API_KEY` | BEHAVIOR video skill discovery | Your Gemini API key |
+| `DASHSCOPE_API_KEY` | Optional alternative video discovery provider | Your DashScope API key |
+
+The application reads these settings from environment variables. API keys and
+Azure resource endpoints have no embedded values in the source code. `.env` is
+excluded from Git. Policy training uses demonstration data and base model weights;
+provider credentials are needed for live planning, reflection and skill discovery.
 
 - [BEHAVIOR and RoboCasa deployment](docs/deployment.md)
 - [Offline skill discovery and data preparation](docs/data.md)

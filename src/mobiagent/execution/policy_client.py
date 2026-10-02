@@ -1,13 +1,5 @@
 """Policy server client — talks to openpi serve_policy over msgpack/websocket.
 
-Wire transport + obs payload construction follow the proven recipe from:
-  - behavior-1k-solution/dimos_pi0_5GT/pi05_policy_client.py    (Pi05WebsocketTransport)
-  - behavior-1k-solution/dimos_pi0_5GT/pi05_policy_bridge.py    (build_policy_observation)
-
-We do NOT import from dimos_pi0_5GT (plan rule: DIMOS-free) but copy the
-non-DIMOS parts inline. Those files only depend on numpy + websockets +
-msgpack — no dimos.* imports — so the rule is preserved in spirit.
-
 Server-side payload contract (consumed by SkillSegmentInputs / BehaviorInputs
 on the openpi side):
     observation/head_image       (H, W, 3) uint8

@@ -18,15 +18,26 @@ compute environment; do not provision another host or launch additional sweeps.
 
 ## RoboCasa
 
-1. Copy [the data template](../../configs/robocasa/data.example.json) to
-   `configs/robocasa/data.json` and fill in paths for all six experts. Preserve
-   `close`, `open`, `switch`, `manipulate`, `navigate`, `pnp` order.
-2. Export absolute paths and run the joint trainer:
+1. Download the official demonstrations in the RoboCasa environment and generate
+   normalization assets and the data recipe in the backend environment:
 
    ```bash
-   export MOBIAGENT_ROBOCASA_RECIPE="$PWD/configs/robocasa/data.json"
+   python scripts/robocasa/download_data.py --dataset-root datasets/robocasa
+   uv run --project policy/openpi scripts/robocasa/prepare_data.py \
+     --manifest datasets/robocasa/datasets.json
+   ```
+
+   Read [training data setup](../../docs/robocasa.md#training-data) for custom
+   task selections. Preserve `close`, `open`, `switch`, `manipulate`, `navigate`,
+   `pnp` order. For existing prepared data, use the supplied recipe.
+2. Validate the recipe, then run the joint trainer:
+
+   ```bash
+   uv run --project policy/openpi scripts/robocasa/train.py \
+     --recipe configs/robocasa/data.json --check-data
    export MOBIAGENT_CHECKPOINT_DIR="$PWD/checkpoints/robocasa"
-   uv run --project policy/openpi scripts/robocasa/train.py --exp-name my_run
+   uv run --project policy/openpi scripts/robocasa/train.py \
+     --recipe configs/robocasa/data.json --exp-name my_run
    ```
 
 3. This recipe trains the shared VLM and all six action experts together:

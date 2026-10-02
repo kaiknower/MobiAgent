@@ -23,7 +23,7 @@ from openpi.training import runner as base_train
 from openpi.models import model as model_lib
 from openpi.training import checkpoints, config, optimizer, sharding, weight_loaders
 from openpi.training.robocasa_data import (
-    BUDGETS, ROOT, SKILLS, RoboCasaV3Data, counts_at, model_config, source_recipe, torch_loader,
+    BUDGETS, SKILLS, RoboCasaV3Data, counts_at, model_config, source_recipe, torch_loader,
 )
 
 OUTPUT = Path(os.environ.get('MOBIAGENT_CHECKPOINT_DIR', 'checkpoints/robocasa'))
@@ -60,7 +60,7 @@ class V3Optimizer:
 
 
 @dataclasses.dataclass(frozen=True)
-class StrictHuman300Loader(weight_loaders.Pi05BaseToSixHeadLoader):
+class StrictBaseLoader(weight_loaders.Pi05BaseToSixHeadLoader):
     def load(self, params):
         result = super().load(params)
         missing = [jax.tree_util.keystr(path) for path, value in jax.tree_util.tree_flatten_with_path(result)[0]
@@ -71,11 +71,11 @@ class StrictHuman300Loader(weight_loaders.Pi05BaseToSixHeadLoader):
 
 
 def recipe(exp_name, resume=False):
-    heads = source_recipe()
+    heads = source_recipe(validate_datasets=True)
     return config.TrainConfig(name='pi05_robocasa_shared_vlm_v3', exp_name=exp_name,
         model=model_config(), data=RoboCasaV3Data(), freeze_filter=nnx.Nothing(),
         optimizer=V3Optimizer(), lr_schedule=optimizer.CosineDecaySchedule(decay_steps=45000),
-        weight_loader=StrictHuman300Loader(heads['close']['base_params']),
+        weight_loader=StrictBaseLoader(heads['close']['base_params']),
         batch_size=48, num_train_steps=45000, num_workers=2, fsdp_devices=8,
         ema_decay=0.99, seed=42, checkpoint_base_dir=str(OUTPUT),
         save_interval=5000, keep_period=None, log_interval=10,
@@ -132,10 +132,23 @@ def main():
     parser.add_argument('--exp-name', default='joint')
     parser.add_argument('--stop-after', type=int, default=45000)
     parser.add_argument('--resume', action='store_true')
+    parser.add_argument('--recipe', type=Path, help='Generated RoboCasa training recipe')
+    parser.add_argument('--check-data', action='store_true', help='Validate one sample per expert and exit before GPU allocation')
     args = parser.parse_args()
+    if args.recipe:
+        os.environ['MOBIAGENT_ROBOCASA_RECIPE'] = str(args.recipe.expanduser().resolve())
     logging.basicConfig(level=logging.INFO)
     base_train.init_logging()
     cfg = recipe(args.exp_name, args.resume)
+    if args.check_data:
+        from openpi.training.robocasa_data import V3Dataset
+        dataset = V3Dataset()
+        for expert, name in enumerate(SKILLS):
+            sample = dataset[(0, expert, 0)]
+            assert sample['state'].shape == (32,) and sample['actions'].shape == (50, 32)
+            assert np.isfinite(sample['state']).all() and np.isfinite(sample['actions']).all()
+            logging.info('Validated %s dataset sample and normalization', name)
+        return
     if not 2 <= args.stop_after <= 45000:
         raise ValueError('stop-after must be between 2 and 45000')
     import pynvml as nv
@@ -177,7 +190,6 @@ def main():
         'model': dataclasses.asdict(cfg.model), 'ema_decay': cfg.ema_decay,
         'optimizer': 'AdamW b1=.9 b2=.95 eps=1e-8 wd=1e-10 global_clip=1',
         'normalization': 'per_skill_mean_std',
-        'note': 'Joint shared backbone changes optimization versus six independent v3 models; no exact-reproduction claim.',
     }, indent=2) + '\n')
     loader = torch_loader(start=start, stop=args.stop_after, workers=2)
     compiled = {}

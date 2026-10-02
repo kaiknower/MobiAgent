@@ -1,7 +1,7 @@
 """Reactive VLM planner — emits ONE subtask at a time.
 
-Provider: Azure OpenAI GPT-5.4 (default). Override via CLAW_PLANNER_MODEL or
-AZURE_OPENAI_DEPLOYMENT.
+Provider: Azure OpenAI. Set AZURE_OPENAI_DEPLOYMENT to your deployment name.
+CLAW_PLANNER_MODEL optionally selects a different planner deployment.
 
 Contract:
 

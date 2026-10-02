@@ -24,6 +24,6 @@ uv run scripts/serve_policy.py --config mobiagent_behavior \
   --checkpoint /path/to/checkpoint --port 8000
 ```
 
-The portable recipe freezes the shared vision-language backbone and trains routed
+The BEHAVIOR recipe freezes the shared vision-language backbone and trains routed
 action experts. Batch sizes, schedules and data paths must be configured for the
 target run. Keep expert order and normalization identical in training and serving.

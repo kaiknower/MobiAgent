@@ -1,18 +1,18 @@
 """Build per-segment training samples from normalized predictions.
 
-Input:  predictions.jsonl (post Step 2 of plan)
+Input:  predictions.jsonl
 Output: segments.jsonl  — one row per segment with all info training needs:
         sample_id, task_id, episode_id, segment_id, task_instruction,
         skill_canonical, skill_description, start_idx_30hz, end_idx_30hz,
         n_frames, head/left/right video paths, parquet path, meta path.
 
-Per plan Step 3:
+Temporal alignment:
   - 30 Hz action data (verified via parquet num_rows == meta length)
   - source_time_sec = compressed_time * time_scale (default 5.0)
   - idx = round(source_time_sec * 30)
   - cap end_idx at parquet num_rows
   - n_frames < 5 segments are flagged in a CSV diagnostic but kept in the JSONL
-    (Step 4 will drop them via filter)
+    (the per-expert splitting stage filters these segments)
   - skill_canonical derived from verb prefix (deterministic, 6 classes):
       'place X in Y'   -> place_in
       'place X on Y'   -> place_on
@@ -64,7 +64,7 @@ def derive_canonical(desc: str) -> str:
         return "open"
     if low.startswith("close "):
         return "close"
-    return "other"  # noise filler ('manipulation', 'inspect X', etc.) — Step 4 filters these out
+    return "other"  # noise filler ('manipulation', 'inspect X', etc.); excluded during per-expert splitting
 
 
 def paths_for(task_id: str, episode_id: str) -> dict[str, Path]:

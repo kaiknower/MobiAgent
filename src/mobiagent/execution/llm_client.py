@@ -1,17 +1,7 @@
-"""Azure OpenAI client for behavior-1k eval VLM agents (planner + judge + replan).
+"""Azure OpenAI client for MobiAgent planning and visual reflection.
 
-Default deployment: gpt-5.4 (overridable via AZURE_OPENAI_DEPLOYMENT or
-CLAW_PLANNER_MODEL / CLAW_JUDGE_MODEL).
-
-Why this exists separate from any DIMOS Azure helper:
-- behavior_1k_eval is DIMOS-free (Step 6a exit criterion)
-- Step 5 of plan: planner uses Azure OpenAI (Gemini was a dev-time prototype)
-
-Required env (set in your shell or via launcher):
-    AZURE_OPENAI_API_KEY
-    AZURE_OPENAI_ENDPOINT          # default: https://YOUR-RESOURCE.openai.azure.com/
-    AZURE_OPENAI_API_VERSION       # default: 2024-12-01-preview
-    AZURE_OPENAI_DEPLOYMENT        # default: gpt-5.4
+Set AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_DEPLOYMENT
+in the environment. AZURE_OPENAI_API_VERSION selects the Azure API version.
 """
 from __future__ import annotations
 
@@ -24,7 +14,7 @@ from typing import Any
 
 DEFAULT_API_VERSION = "2024-12-01-preview"
 DEFAULT_ENDPOINT = ""
-DEFAULT_DEPLOYMENT = "gpt-5.4"
+DEFAULT_DEPLOYMENT = ""
 
 
 _CLIENT_SINGLETON: Any = None
@@ -33,20 +23,7 @@ _TEMPERATURE_SUPPORTED: bool = True
 
 
 def build_azure_client() -> Any:
-    """Module-level singleton AzureOpenAI client.
-
-    The previous per-call client incurred a fresh TCP/TLS handshake for every
-    planner/judge LLM call. Each handshake (~200-400 ms over Azure's TLS 1.3)
-    was also where most of the `APIConnectionError: Connection error.`
-    exceptions originated — Azure's load balancer occasionally rejects bursty
-    new connections under load even when warm connections work fine.
-
-    By caching ONE long-lived client per process and giving its underlying
-    httpx.Client a wide keepalive pool (max_keepalive=20, expiry=300 s) plus
-    generous timeouts, we let openai's SDK reuse the same TCP/TLS session
-    across hundreds of calls. Result: connection errors drop from ~5-10 % per
-    call to <1 % per call, no retries needed for typical Azure flakiness.
-    """
+    """Reuse an Azure client and connection pool across planner and critic calls."""
     global _CLIENT_SINGLETON
     if _CLIENT_SINGLETON is not None:
         return _CLIENT_SINGLETON
@@ -56,6 +33,9 @@ def build_azure_client() -> Any:
     api_key = os.getenv("AZURE_OPENAI_API_KEY", "")
     if not api_key:
         raise RuntimeError("AZURE_OPENAI_API_KEY must be set")
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", DEFAULT_ENDPOINT).strip()
+    if not endpoint:
+        raise RuntimeError("AZURE_OPENAI_ENDPOINT must be set; see README.md#api-configuration")
 
     http_client = httpx.Client(
         # Wide keepalive pool — many idle connections kept warm so a chunk
@@ -75,7 +55,7 @@ def build_azure_client() -> Any:
 
     _CLIENT_SINGLETON = AzureOpenAI(
         api_version=os.getenv("AZURE_OPENAI_API_VERSION", DEFAULT_API_VERSION),
-        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", DEFAULT_ENDPOINT),
+        azure_endpoint=endpoint,
         api_key=api_key,
         http_client=http_client,
         max_retries=0,  # SDK-level retries off; we use the loop below.
@@ -191,6 +171,8 @@ def chat_completion_json(
     Returns the parsed JSON object from the model's reply.
     """
     deployment = deployment or os.getenv("AZURE_OPENAI_DEPLOYMENT", DEFAULT_DEPLOYMENT)
+    if not deployment.strip():
+        raise RuntimeError("AZURE_OPENAI_DEPLOYMENT must be set; use the deployment name from your Azure resource")
 
     messages = [
         {"role": "system", "content": system_text},
