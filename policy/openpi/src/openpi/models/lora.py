@@ -108,7 +108,7 @@ class FeedForward(nn.Module):
         self.w_linear_lora = None
         if self.lora_config:
             # Setup LoRA parameters.
-            # TODO: follow up with a simplified init_fn api.
+            # Initialize the low-rank projection.
             self.w_gating_lora = (
                 self.param("gating_einsum_lora_a", self.lora_config.init_fn, (2, self.features, self.lora_config.rank)),
                 self.param(

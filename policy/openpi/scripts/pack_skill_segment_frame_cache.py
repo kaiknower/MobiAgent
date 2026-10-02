@@ -1,22 +1,10 @@
-"""Repack the per-frame JPEG cache into one file per source mp4.
+"""Pack cached JPEG frames into one indexed file per source video.
 
-The original ``build_skill_segment_frame_cache.py`` writes ~31M small JPEGs to
-a shared filesystem. At training time, the dataset opens hundreds of
-files per batch; on yrfs each open is a network round-trip, which produces
-~30-50 sec stalls every ~2 min and roughly 3× the average step time.
-
-This packer keeps the JPEGs (compression unchanged) but concatenates each
-video's frames into a single file with a small index header. File count
-drops from 31M → 3K, eliminating the metadata-bound stalls. The dataset's
-``_seek_frame`` is updated in lockstep to read packed entries.
-
-File format (little-endian, all int64):
-    [ num_entries ]                        (8 B)
-    [ frame_idx, byte_offset, byte_length ] × num_entries  (24 B each)
-    [ concatenated JPEG bytes ]            (variable)
-
-Lookup: read header, read full index into a dict, then per-frame seek+read.
-"""
+JPEG bytes are preserved. Each little-endian file contains:
+    [num_entries]                                  (8 bytes)
+    [frame_idx, byte_offset, byte_length] * entries (24 bytes each)
+    [concatenated JPEG bytes]
+The dataset reader loads the index once and retrieves frames by offset."""
 from __future__ import annotations
 
 import argparse

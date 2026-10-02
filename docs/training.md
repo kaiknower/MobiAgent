@@ -5,6 +5,12 @@ For RoboCasa training, serving and agent inference, use the dedicated
 
 ## BEHAVIOR
 
+Source videos default to `datasets/behavior/videos` and the optional packed-frame
+cache defaults to `data/behavior/frame_cache` in this repository. To use another
+location, set absolute `OPENPI_SKILL_SEGMENT_VIDEO_ROOT` and
+`OPENPI_SKILL_SEGMENT_PACKED_CACHE_ROOT` paths in `.env`. A packed cache is optional;
+the reader decodes source videos directly when no matching cache is available.
+
 The OpenPI-derived backend needs Linux, compatible NVIDIA GPUs, and the source
 JAX/PyTorch dependencies. Its environment is separate from the lightweight agent.
 

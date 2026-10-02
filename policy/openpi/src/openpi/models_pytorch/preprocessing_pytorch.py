@@ -37,7 +37,7 @@ def preprocess_observation_pytorch(
     for key in image_keys:
         image = observation.images[key]
 
-        # TODO: This is a hack to handle both [B, C, H, W] and [B, H, W, C] formats
+        # Handle both [B, C, H, W] and [B, H, W, C] image formats.
         # Handle both [B, C, H, W] and [B, H, W, C] formats
         is_channels_first = image.shape[1] == 3  # Check if channels are in dimension 1
 

@@ -1,15 +1,8 @@
-"""Global timing accumulator for the lhe_omni pipeline (entry-agnostic).
+"""Timing accumulator for simulation and policy execution.
 
-Each component adds to T:
-  - VLA inference  : WebsocketPolicyClient.infer   (server round-trip)
-  - pure physics   : env_omni.step  (og.sim.step with rendering OFF)
-  - render         : env_omni.step  (separate og.sim.render — EXCLUDED from report)
-  - planner / judge: planner_vlm.next_subtask / judge_vlm.judge (Azure VLM calls)
-
-On process exit, dumps T to $CLAW_TIMING_OUT (default ./claw_timing.json) with
-derived totals. `reported_infer_plus_phys_s` = infer + phys (render EXCLUDED) —
-the metric directly comparable to the champion's number.
-"""
+Tracks inference, physics, rendering, planner and critic calls separately.
+Writes totals to CLAW_TIMING_OUT (default ./claw_timing.json) on exit.
+reported_infer_plus_phys_s includes inference and physics, excluding render."""
 from __future__ import annotations
 
 import atexit

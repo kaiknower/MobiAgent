@@ -46,8 +46,8 @@ compute environment; do not provision another host or launch additional sweeps.
    If those checks fail, report the resource requirement instead of changing to
    a frozen-backbone recipe or taking devices used by another job.
 4. Resume the same experiment with `--resume`. `--stop-after` is an absolute end
-   step (2–45000), not an additional step count. A two-step check still requires
-   the full training hardware and base weights.
+   step (2–45000), not an additional step count. Short runs require the same
+   training hardware and base weights.
 
 ## BEHAVIOR
 
@@ -67,7 +67,7 @@ compute environment; do not provision another host or launch additional sweeps.
    This is distinct from RoboCasa's joint-training recipe. Resume the same
    BEHAVIOR experiment by adding `--resume`.
 
-## Completion and handoff
+## Training outputs
 
 Report the actual checkpoint directory, last completed step and any failure.
 Preserve the checkpoint's normalization assets and training configuration.

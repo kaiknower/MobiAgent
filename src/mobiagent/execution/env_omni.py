@@ -125,8 +125,8 @@ class OmniGibsonEnv:
         """Reset to a fresh episode of `task`.
 
         If `tro_instance_id` is given, a per-instance `tro_state.json` overlay
-        is applied AFTER the base reset — same pattern the b1k champion
-        Evaluator uses (`omnigibson/learning/eval.py:load_task_instance`).
+        is applied AFTER the base reset using the BEHAVIOR evaluator format
+        (`omnigibson/learning/eval.py:load_task_instance`).
         Without this overlay, every reset produces the SAME default
         starting state from the base `_0_0_template`.
 
@@ -158,7 +158,7 @@ class OmniGibsonEnv:
             # makes targets look further away than during training. Wrist
             # cameras keep the default aperture (training did NOT override
             # them).
-            # Match champion eval pipeline (DepthLowResWrapper +
+            # Use the BEHAVIOR evaluation pipeline (DepthLowResWrapper +
             # eval_b1k_wrapper.process_obs):
             #   head : aperture=40, render at 720x720
             #   wrist: render at 480x480 (default aperture)
@@ -180,7 +180,7 @@ class OmniGibsonEnv:
                     wcam.image_width  = 480
                 self._env.load_observation_space()
                 logger.info(
-                    "champion-aligned cameras: head 720x720 aperture=40, "
+                    "BEHAVIOR cameras: head 720x720 aperture=40, "
                     "wrist 480x480 aperture=default; obs resize_with_pad → 224 "
                     "in _to_deployment_obs"
                 )
@@ -211,7 +211,7 @@ class OmniGibsonEnv:
         and apply it to the live env, then settle physics.
 
         Direct port of `omnigibson/learning/eval.py:load_task_instance`
-        (champion solution). Without this step, every reset gives the SAME
+        in the BEHAVIOR evaluator. Without this step, every reset gives the SAME
         default starting state from the BDDL `_0_0_template`.
         """
         import json as _json
@@ -314,7 +314,7 @@ class OmniGibsonEnv:
                 and self._episode_steps + chunk_steps >= self._episode_step_boundary
             ):
                 break
-            # Champion-identical decomposition so RENDER time is measured and
+            # BEHAVIOR decomposition so RENDER time is measured and
             # EXCLUDED from the reported total: _convert -> _pre_step ->
             # physics (render OFF) -> render(once) -> _post_step. Equivalent to
             # the original `self._env.step(a)` (n_render_iterations=1).
@@ -382,7 +382,7 @@ class OmniGibsonEnv:
         """Frames captured during the most recent `step()`. Camera is one of
         `head` / `left_wrist` / `right_wrist`. Empty list if `step()` not yet called.
 
-        Tries the champion-aligned key first (egocentric_camera / wrist_image_*),
+        Tries the BEHAVIOR key first (egocentric_camera / wrist_image_*),
         falls back to the legacy head_image / left_wrist_image / right_wrist_image
         names so older recordings still resolve.
         """
@@ -533,7 +533,7 @@ class OmniGibsonEnv:
         right = _find_first(flat, (RIGHT_RGB_KEY,))
         state = _find_first(flat, (PROPRIO_KEY,))
 
-        # Champion-identical pipeline (b1k.shared.eval_b1k_wrapper.process_obs):
+        # BEHAVIOR pipeline (b1k.shared.eval_b1k_wrapper.process_obs):
         # source 720x720 (head) / 480x480 (wrist) → drop alpha [..., :3] →
         # openpi_client.image_tools.resize_with_pad(224, 224). Same function
         # the server's model_transforms (ResizeImages) runs, so client/server
@@ -545,7 +545,7 @@ class OmniGibsonEnv:
             if arr.ndim >= 3 and arr.shape[0] in (3, 4) and arr.shape[-1] not in (3, 4):
                 arr = np.transpose(arr, (1, 2, 0))   # CHW → HWC (rare; OmniGibson is HWC)
             if arr.ndim >= 3 and arr.shape[-1] == 4:
-                arr = arr[..., :3]                    # drop alpha (matches champion `[..., :3]`)
+                arr = arr[..., :3]                    # drop alpha (retain RGB channels)
             if arr.dtype != np.uint8:
                 if np.issubdtype(arr.dtype, np.floating):
                     arr = (arr * 255.0).clip(0, 255).astype(np.uint8)

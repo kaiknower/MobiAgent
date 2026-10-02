@@ -1,4 +1,4 @@
-"""RoboCasa v3 data contract for a shared VLM and six independent experts."""
+"""RoboCasa data contract for a shared VLM and six independent experts."""
 from __future__ import annotations
 
 import dataclasses

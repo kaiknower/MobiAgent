@@ -19,7 +19,7 @@ class NormStats:
 
     # Action-only: row-major covariance matrix of the *normalized* action chunk
     # treated as a single (action_horizon * action_dim,)-vector. Used by the
-    # b1k-style "correlated noise" trick in flow matching to sample noise that
+    # optional correlated-noise sampling in flow matching, preserving noise that
     # respects temporal/dim correlations of the action distribution.
     # Shape: (action_horizon * action_dim, action_horizon * action_dim).
     correlation_matrix: numpydantic.NDArray | None = None

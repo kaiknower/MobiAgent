@@ -250,18 +250,9 @@ def next_subtask(
     except Exception as exc:
         raise RuntimeError(f"planner returned invalid JSON: {exc!s}; raw={obj!r}") from exc
 
-    # NOTE: deterministic `_apply_ordinals` post-processor was REMOVED. v12
-    # training distribution is multi-modal (e.g. task-0022's `move to
-    # hallstand` count distributes as 2/3/4 across episodes at 87/10/3%) —
-    # forcing a count from history+plan_sketch like our previous post-
-    # processor did was producing OOD strings such as `move to hallstand
-    # (6/7)` that the policy was never trained on. The planner is asked
-    # via PROMPTS.md to emit `(i/N)` itself; trust it.
 
 
-# Backwards-compat: `build_dynamic_plan` is no longer the primary path. Kept as
-# a thin wrapper that calls `next_subtask` once for callers who still want a
-# single-step "warmup" plan (used by run.py --dry-run).
+# Create a one-subtask plan for dry-run callers.
 def build_dynamic_plan(
     *,
     global_goal: str,
@@ -271,9 +262,7 @@ def build_dynamic_plan(
     deployment: str | None = None,
     cache_path: Path | None = None,
 ) -> "DynamicPlan":  # noqa: F821  (forward ref)
-    """Compatibility shim: emit ONE subtask via `next_subtask` and wrap as a
-    DynamicPlan. New code should call `next_subtask` directly.
-    """
+    """Request one subtask and wrap it in a DynamicPlan."""
     from .schemas import DynamicPlan
 
     if cache_path is not None and cache_path.exists():

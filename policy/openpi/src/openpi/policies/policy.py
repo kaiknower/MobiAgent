@@ -71,7 +71,7 @@ class Policy(BasePolicy):
 
     @override
     def infer(self, obs: dict, *, noise: np.ndarray | None = None) -> dict:  # type: ignore[misc]
-        # Rolling chunk inpainting (b1k champion protocol).
+        # Rolling chunk inpainting.
         # Client sends ``prev_actions`` in *physical* action space — same
         # shape/units as the actions it last received. Shape (T, action_dim_user)
         # where action_dim_user is the user-facing dim (23 for our pipeline).

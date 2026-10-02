@@ -88,7 +88,7 @@ See [using agent skills](docs/skills.md) for invocation and implementation detai
 skills/                 Agent workflow packages (SKILL.md + agent metadata)
   mobiagent-execution/  Long-horizon task execution and policy serving
   mobiagent-discovery/  Skill discovery and training-data export
-  mobiagent-training/   Policy training and checkpoint handoff
+  mobiagent-training/   Policy training and checkpoint serving
 scripts/
   robocasa/           RoboCasa download, preparation, inference, serving and training
   data/               Demonstration segmentation and per-expert data splitting

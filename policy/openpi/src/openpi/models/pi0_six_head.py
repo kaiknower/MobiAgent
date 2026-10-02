@@ -445,10 +445,7 @@ class Pi0SixHead(_model.BaseModel):
                     f"sum(per_expert_counts)={sum(per_expert_counts)} != batch_size {B}"
                 )
 
-        # Fast path: single-head batch (used by per-head sequential training,
-        # e.g., v11_e1 stage-2 specialization). When exactly one slot is
-        # non-zero, skip the per-expert loop + slicing/concat overhead and
-        # dispatch the full batch directly to that expert.
+        # Dispatch a single-expert batch directly to its active tower.
         nonzero_eids = [i for i, c in enumerate(per_expert_counts) if c > 0]
         if len(nonzero_eids) == 1:
             return self.compute_loss_for_expert(
@@ -525,7 +522,7 @@ class Pi0SixHead(_model.BaseModel):
         inpaint_active = prev_actions is not None and prev_actions_mask is not None
         if inpaint_active:
             # OT-path target uses the same noise that initializes the denoise
-            # loop (matches b1k champion: ``fixed_z_O = noise[O_indices]``).
+            # loop to preserve the initial noise on conditioned coordinates.
             # At t=1 the target equals the loop's starting state at masked
             # positions, so the inpaint constraint sits *on* the trajectory
             # the model is descending — not on a separately sampled path.

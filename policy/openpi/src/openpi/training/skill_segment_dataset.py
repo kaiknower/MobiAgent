@@ -1,6 +1,6 @@
 """Skill-segment dataset for the 6-head π0.5 training plan.
 
-Reads `head__*.jsonl` shards produced by Claw's `split_per_head.py` and yields
+Reads `head__*.jsonl` shards produced by `scripts/data/split_per_head.py` and yields
 per-segment training samples in the same dict shape consumed by
 ``openpi.training.config.DataConfig`` -> the model's ``Observation``.
 
@@ -53,8 +53,7 @@ def _read_parquet_state_action(
 ) -> tuple[str, np.ndarray, np.ndarray]:
     """Worker (top-level for picklability): read one parquet's (state, action) columns.
 
-    Uses pa.compute.list_flatten + to_numpy (~14× faster than to_pylist + np.asarray
-    for ``list<double>`` columns).
+    Converts Arrow list columns with pa.compute.list_flatten and to_numpy.
 
     Columns default to BEHAVIOR-1K's ``observation.state`` (256-dim) / ``action`` (23-dim);
     pass alternative column names for other datasets. Default columns retain the explicit shapes
@@ -198,14 +197,10 @@ def load_all_head_jsonls(
 
 
 def build_prompt(row: SkillSegmentRow, style: str = "task_then_now") -> str:
-    """Build the prompt fed to the VLM.
+    """Build the VLM prompt.
 
-    Styles:
-      - ``"task_then_now"`` (default, v15 and earlier):
-        ``f"{task_instruction}. Now: {skill_description}."``
-      - ``"skill_only"`` (v16): just ``skill_description`` verbatim — no
-        leading task instruction, no "Now:" prefix, no trailing punctuation.
-    """
+    ``task_then_now`` combines the task instruction and skill description.
+    ``skill_only`` returns the skill description verbatim."""
     if style == "skill_only":
         return row.skill_description
     if style != "task_then_now":
@@ -218,22 +213,14 @@ def build_prompt(row: SkillSegmentRow, style: str = "task_then_now") -> str:
 import io
 import struct
 
-# Per-mp4 packed JPEG cache (built by scripts/pack_skill_segment_frame_cache.py).
-# 31M tiny JPEGs across yrfs/NFS produced ~30-50 sec stalls every ~2 min during
-# training; packing all frames of one source mp4 into a single ``.pak`` file
-# (with a small frame_idx → (offset, length) header) drops file count from 31M
-# to ~3K and eliminates the metadata-bound stalls.
+# Packed JPEG cache: one indexed file per source video.
 SKILL_SEGMENT_PACKED_CACHE_ROOT = Path(
-    os.environ.get(
-        "OPENPI_SKILL_SEGMENT_PACKED_CACHE_ROOT",
-        "/ks3-intern/yuezhang/skill_segment_cache_v8_packed",
-    )
+    os.environ.get("OPENPI_SKILL_SEGMENT_PACKED_CACHE_ROOT")
+    or str(Path(__file__).resolve().parents[5] / "data/behavior/frame_cache")
 )
 SKILL_SEGMENT_VIDEO_ROOT = Path(
-    os.environ.get(
-        "OPENPI_SKILL_SEGMENT_VIDEO_ROOT",
-        "/ks3-intern/yuezhang/behavior_224_rgb/videos",
-    )
+    os.environ.get("OPENPI_SKILL_SEGMENT_VIDEO_ROOT")
+    or str(Path(__file__).resolve().parents[5] / "datasets/behavior/videos")
 )
 _PACK_HEADER = struct.Struct("<Q")
 _PACK_ENTRY = struct.Struct("<qqq")
@@ -245,14 +232,10 @@ def _packed_path_for(video_path: Path) -> Path:
 
 
 class _PackedJpegReader:
-    """Random-access reader for one .pak file. One handle per (worker, video).
+    """Random-access, mmap-backed reader for one packed JPEG file.
 
-    Uses ``mmap`` so OS page cache transparently keeps hot bytes in RAM after
-    the first read. With 460 GB system RAM and a 315 GB packed cache, the
-    entire dataset fits in page cache after one warm-up epoch — subsequent
-    ``get`` calls are RAM-speed instead of yrfs round-trips. The header+index
-    (24 B per frame, ~250 KB for ~10K frames) is parsed once on construction.
-    """
+    The frame index is loaded once per reader. Memory-mapped reads share the
+    operating system page cache."""
 
     __slots__ = ("path", "_fd", "_mm", "_offsets", "_lengths", "_data_start")
 
@@ -297,13 +280,7 @@ class _PackedJpegReader:
             pass
 
 
-# Per-thread LRU of open packed readers — same race as _CV2_CAPS had.
-# `_PackedJpegReader` itself is read-only mmap-backed and IS thread-safe to
-# call get() on, but the LRU bookkeeping (pop on eviction) raced when two
-# threads tried to evict the same head key → KeyError mid-batch on first
-# real epoch. Per-thread dict gives each ThreadedBatchLoader worker its own
-# 256-cap LRU. With 8 workers × 256 mmap'd .pak files, per-thread RSS stays
-# bounded; OS page cache is shared regardless.
+# Thread-local reader caches avoid concurrent LRU updates.
 _PACKED_READERS_LOCAL = _threading.local()
 _PACKED_READERS_MAX = 256
 
@@ -315,18 +292,7 @@ def _packed_readers_dict() -> dict[str, _PackedJpegReader]:
         _PACKED_READERS_LOCAL.readers = d
     return d
 
-# Per-thread LRU of cv2.VideoCapture handles for the no-packed-cache fallback
-# path (reads frames straight from .mp4 instead of the packed JPEG cache).
-# cv2.VideoCapture is *much* lighter than decord.VideoReader (~1 MB per cap
-# vs decord's full-video buffer). LRU=8 means peak per-thread RSS for this
-# cache is ~8 MB regardless of dataset size, vs decord's 30-50 GB observed.
-#
-# Per-thread (not per-worker) because the in-process ThreadedBatchLoader
-# runs ``__getitem__`` from N threads concurrently, and cv2.VideoCapture is
-# NOT thread-safe — sharing one cap across threads corrupts internal seek
-# state. ``threading.local`` gives each thread its own dict; plus there's
-# no contention on the LRU bookkeeping (the previous shared dict raced on
-# pop() → KeyError when two threads evicted the same key).
+# Thread-local OpenCV handles keep video seek state isolated and bounded.
 _CV2_CAPS_LOCAL = _threading.local()
 _CV2_CAPS_MAX = 8
 
@@ -361,15 +327,10 @@ _CV2_THREADS_PINNED = False
 
 
 def _get_cv2_cap(video_path: str):
-    """Lazy cv2.VideoCapture cached per thread (LRU bounded ~8 caps).
-    Each thread has its own LRU dict via ``threading.local`` — cv2 capture
-    objects are not thread-safe, so this also avoids cross-thread state
-    corruption when called from the in-process ThreadedBatchLoader.
+    """Return a video capture from the thread-local bounded cache.
 
-    Also pins cv2/FFmpeg internal thread count to 1: with N worker threads
-    each owning 8 caps, default FFmpeg multi-threading (~4 threads/cap)
-    explodes to 6000+ OS threads, which hurts more than helps for short
-    seek+read calls. ``setNumThreads(1)`` is set once globally."""
+    Each thread owns its capture handles. Limit decoder threads to avoid
+    CPU oversubscription when loading multiple videos concurrently."""
     global _CV2_THREADS_PINNED
     caps = _cv2_caps_dict()
     cap = caps.get(video_path)
@@ -393,14 +354,16 @@ def _get_cv2_cap(video_path: str):
 
 
 def _seek_frame(video_path: Path, target_idx: int, fps: int = DEFAULT_FPS) -> np.ndarray:
-    """Decode frame ``target_idx`` from this video (HWC uint8 RGB).
+    """Decode a video frame as HWC uint8 RGB.
 
-    Tries the packed JPEG cache first (fastest on slow filesystems). Falls
-    back to direct mp4 decode via decord when the cache hasn't been built
-    — adequate on local NVMe/RAID and saves the ~600 GB build cost.
-    """
-    packed_path = _packed_path_for(Path(video_path))
-    if not packed_path.exists():
+    Use the packed JPEG cache when available, otherwise decode the source
+    video with OpenCV. Videos outside the configured cache root are decoded
+    directly."""
+    try:
+        packed_path = _packed_path_for(Path(video_path))
+    except ValueError:
+        packed_path = None
+    if packed_path is None or not packed_path.exists():
         # No packed cache — read straight from mp4 via cv2 (BGR→RGB).
         import cv2  # noqa: PLC0415
         cap = _get_cv2_cap(str(video_path))
@@ -489,13 +452,8 @@ class SkillSegmentDataset(Dataset):
         self._state_column = str(state_column)
         self._action_column = str(action_column)
 
-        # Preload (state, action) columns from every unique parquet into RAM.
-        # Without this, every __getitem__ does pq.read_table on a 7-19 MB file —
-        # at scale, NVMe random-read contention with other tenants made this
-        # the dominant first-batch bottleneck (observed 9.5 MB/s aggregate,
-        # ~6 minutes for one batch). Holding {state, action} columns only
-        # costs ~10 GB total for 5-task v11_5tasks, well under available RAM.
-        # Disable via OPENPI_NO_PARQUET_PRELOAD=1 if you need to fall back.
+        # Preload state/action columns to avoid repeated parquet reads.
+        # Set OPENPI_NO_PARQUET_PRELOAD=1 to decode columns on demand.
         if os.environ.get("OPENPI_NO_PARQUET_PRELOAD", "0") != "1":
             self._preload_parquet_cache()
 
@@ -506,12 +464,8 @@ class SkillSegmentDataset(Dataset):
 
         unique_paths = sorted({r.parquet for r in self._rows})
         n = len(unique_paths)
-        # ProcessPool sidesteps the ThreadPoolExecutor + pyarrow lock-ordering
-        # deadlock seen earlier (workers had own python state). Combined with
-        # pa.compute.list_flatten in the worker (vs to_pylist), 999 parquets
-        # drop from ~44 min sequential to ~3-5 min with 8 workers. Tuned
-        # conservatively (8) to avoid NVMe head thrash; raise via env if RAM
-        # disk or NVMe RAID handles it.
+        # Load parquet columns in separate processes.
+        # Configure concurrency with OPENPI_PRELOAD_WORKERS.
         n_workers = int(os.environ.get("OPENPI_PRELOAD_WORKERS", "8"))
         n_workers = min(n_workers, mp.cpu_count(), max(1, n))
         logger.info(

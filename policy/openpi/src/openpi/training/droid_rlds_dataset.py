@@ -47,8 +47,8 @@ class DroidRldsDataset:
         max_loaded_steps_per_episode: int = 100,
         # Reduce this if you are running out of memory, but careful -- below ~100k shuffling is not sufficiently random.
         shuffle_buffer_size: int = 250_000,
-        num_parallel_reads: int = -1,  # -1 == tf.data.AUTOTUNE -- hack to not import tf at top level
-        num_parallel_calls: int = -1,  # -1 == tf.data.AUTOTUNE -- hack to not import tf at top level
+        num_parallel_reads: int = -1,  # -1 is tf.data.AUTOTUNE; TensorFlow is imported lazily.
+        num_parallel_calls: int = -1,  # -1 is tf.data.AUTOTUNE; TensorFlow is imported lazily.
     ):
         # Import tensorflow here to not make it mandatory in case RLDS data loader is not used.
         import dlimp as dl

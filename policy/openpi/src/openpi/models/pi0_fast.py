@@ -135,7 +135,7 @@ class Pi0FAST(_model.BaseModel):
     def __init__(self, config: Pi0FASTConfig, rngs: nnx.Rngs):
         super().__init__(config.action_dim, config.action_horizon, config.max_token_len)
         paligemma_config = _gemma.get_config(config.paligemma_variant)
-        # TODO: rewrite gemma in NNX. For now, use bridge.
+        # Bridge the Gemma module into NNX.
         llm = nnx_bridge.ToNNX(
             _gemma.Module(
                 **paligemma_config,
@@ -241,7 +241,7 @@ class Pi0FAST(_model.BaseModel):
         max_decoding_steps: int | at.Int[at.Array, ""] = 256,
         temperature: float = 0.0,
     ) -> _model.Actions:
-        # TODO: this is a hack to get the image keys.
+        # Resolve image keys from the input specification.
         observation = _model.preprocess_observation(
             None, observation, train=False, image_keys=list(observation.images.keys())
         )

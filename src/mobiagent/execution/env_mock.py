@@ -1,8 +1,7 @@
-"""Mock env: pure-Python stand-in for OmniGibson during early development.
+"""Pure-Python simulation environment for offline usage examples.
 
-No DIMOS, no OmniGibson. Returns synthetic observations and can be configured
-to flip is_success() to True after N steps.
-"""
+Returns synthetic observations and can mark a task successful after a
+configurable number of steps."""
 from __future__ import annotations
 
 from typing import Any

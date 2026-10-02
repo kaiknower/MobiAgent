@@ -85,7 +85,7 @@ def recipe(exp_name, resume=False):
 def step_fn(cfg, counts, rng, state, batch):
     rng = jax.random.fold_in(rng, state.step)
     grads, metrics = base_train._compute_grads_step(cfg, counts, rng, state, batch)
-    # Audit all gradient groups; inactive towers must stay exactly unchanged.
+    # Measure shared-VLM and per-expert gradients; inactive towers stay unchanged.
     grouped = {i: [] for i in range(-1, 6)}
     for path, leaf in jax.tree_util.tree_flatten_with_path(grads)[0]:
         grouped[head_for_path(path)].append(leaf)
@@ -181,7 +181,7 @@ def main():
     jax.block_until_ready(state)
     start = int(state.step)
     if args.resume and start < 2:
-        raise RuntimeError('Formal resume requires a completed two-step checkpoint')
+        raise RuntimeError('Resume requires a checkpoint with at least two completed steps')
     logging.info('STATE READY: step=%d devices=%d checkpoint=%s', start, jax.device_count(), cfg.checkpoint_dir)
     cfg.checkpoint_dir.joinpath('joint_recipe.json').write_text(json.dumps({
         'skills': SKILLS, 'budgets': BUDGETS, 'per_active_head_batch': 8,
@@ -234,10 +234,6 @@ def main():
                 manager.wait_until_finished()
                 validate_assets(cfg.checkpoint_dir / str(step + 1))
                 logging.info('CHECKPOINT VERIFIED step=%d', step + 1)
-        if args.stop_after == 2:
-            (cfg.checkpoint_dir / 'smoke_passed.json').write_text(json.dumps(
-                {'steps': 2, 'gradients': 'shared VLM and all six experts nonzero and finite',
-                 'per_expert_assets_verified': True, 'timestamp': time.time()}) + '\n')
     finally:
         manager.wait_until_finished()
         manager.close()

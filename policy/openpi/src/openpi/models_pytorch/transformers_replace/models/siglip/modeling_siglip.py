@@ -1050,7 +1050,6 @@ class SiglipModel(SiglipPreTrainedModel):
         >>> logits_per_image = outputs.logits_per_image
         >>> probs = torch.sigmoid(logits_per_image) # these are the probabilities
         >>> print(f"{probs[0][0]:.1%} that image 0 is '{texts[0]}'")
-        31.9% that image 0 is 'a photo of 2 cats'
         ```"""
         # Use SigLIP model's config for some fields (if specified) instead of those of vision & text components.
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions

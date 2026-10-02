@@ -38,13 +38,10 @@ from .policy_client import (
 
 
 def _maybe_wrap_compression(client: PolicyClientProtocol) -> PolicyClientProtocol:
-    """Optionally wrap a base client with CompressionPolicyClient — champion's
-    cubic-spline action compression (`/behavior-1k-solution/src/b1k/shared/
-    eval_b1k_wrapper.py`). Enabled when `CLAW_ACTION_COMPRESS=1`. Tunables:
-      - CLAW_EXECUTE_STEPS  (default 20)  — target sim-step count per chunk
-      - CLAW_VELOCITY_DIMS  (default "0,1,2") — comma-separated indices to
-        scale by `len_in / execute_steps` (base velocity channels).
-    """
+    """Enable cubic-spline action resampling when CLAW_ACTION_COMPRESS=1.
+
+    CLAW_EXECUTE_STEPS sets the output chunk length (default 20).
+    CLAW_VELOCITY_DIMS lists velocity channels to rescale (default 0,1,2)."""
     if os.environ.get("CLAW_ACTION_COMPRESS", "0") != "1":
         return client
     vd_raw = os.environ.get("CLAW_VELOCITY_DIMS", "0,1,2")

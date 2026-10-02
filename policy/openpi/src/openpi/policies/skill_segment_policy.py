@@ -1,4 +1,4 @@
-"""Data transforms for the 6-head π0.5 skill_segments_v1 plan.
+"""Data transforms for routed six-expert π0.5 policies.
 
 Wraps :class:`openpi.policies.behavior_policy.BehaviorInputs` (which already
 handles BEHAVIOR-1K's 256-dim full proprio → 23-dim canonical state slice and

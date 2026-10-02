@@ -1,27 +1,8 @@
-"""Pre-decode every frame the 6-head skill_segment dataset needs into JPEGs.
+"""Pre-decode BEHAVIOR skill-segment video frames into JPEGs.
 
-Why
----
-``SkillSegmentDataset._seek_frame`` calls decord per frame from DataLoader
-workers. JAX+CUDA are already initialized in the parent at that point, and
-fork()'ing a worker that subsequently imports decord SIGKILLs in our setup
-(spawn / forkserver re-run scripts/train.py which transitively imports cv2
-and crashes on missing libGL.so.1). The cleanest workaround is to do all
-video decoding offline in a stand-alone process, store every needed frame
-as a JPEG, and have the training-time worker just ``Image.open`` it.
-
-Build cost (full train v8): ~31M frames × 224x224 JPEG q=92 ≈ 148 GB,
-~30 min on 16 CPU workers.
-
-Layout
-------
-``<cache_root>/<task>/<view>/<episode>/<idx:08d>.jpg``
-
-where ``<task>``, ``<view>``, ``<episode>`` mirror the original mp4 path
-under ``<video_root>``. The training-side ``_seek_frame`` reconstructs this
-path from the row's ``head_video`` / ``left_video`` / ``right_video`` field
-plus the resolved frame index.
-"""
+Cache layout: <cache_root>/<task>/<view>/<episode>/<idx:08d>.jpg.
+Task, view and episode mirror the source video path under video_root.
+The dataset reader resolves frame indices from each segment metadata row."""
 from __future__ import annotations
 
 import argparse
@@ -119,7 +100,7 @@ def main() -> None:
     parser.add_argument("--action-horizon", type=int, default=30)
     parser.add_argument("--workers", type=int, default=16)
     parser.add_argument("--jpeg-quality", type=int, default=92)
-    parser.add_argument("--limit-videos", type=int, default=0, help="for smoke testing only")
+    parser.add_argument("--limit-videos", type=int, default=0, help="process at most this many videos; 0 processes all videos")
     args = parser.parse_args()
 
     args.cache_root.mkdir(parents=True, exist_ok=True)
@@ -132,7 +113,7 @@ def main() -> None:
     items = list(jobs.items())
     if args.limit_videos > 0:
         items = items[: args.limit_videos]
-        print(f"smoke test mode: limiting to first {len(items)} videos", flush=True)
+        print(f"Limiting processing to first {len(items)} videos", flush=True)
 
     work = [
         (video, idxs, str(args.video_root), str(args.cache_root), args.jpeg_quality)

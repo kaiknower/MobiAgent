@@ -1,18 +1,8 @@
-"""Config for the 6-head π0.5 variant (skill_segments_v1).
+"""Configuration for a shared-VLM policy with six routed action experts.
 
-Architecture (heavy variant — locked in by behavior-1k-solution-gt
-HANDOFF_FOR_TRAINING_MACHINE.md, 2026-04-27):
-
-    PaliGemma (~3B) ──── shared self-attention ────┐
-                                                   │
-                                                   ▼
-       6 parallel action expert towers (gemma_300m each, ~300M)
-        └─ move_to / pick_up_from / place_in / place_on / open / close
-
-Hard routing by ``skill_canonical`` (training) / ``stage_hint`` (eval).
-Each sample updates exactly one expert's weights; the shared backbone gets
-gradients from all six expert paths (cross-class transfer).
-"""
+PaliGemma provides a shared backbone; each action expert uses a Gemma tower.
+Training routes each sample by skill_canonical and inference by stage_hint.
+Each sample updates its selected expert and the trainable shared backbone."""
 from __future__ import annotations
 
 import dataclasses
@@ -59,7 +49,7 @@ class Pi0SixHeadConfig(pi0_config.Pi0Config):
     # The R1Pro action is 23-dim; the data pipeline must pad with zeros to 32.
     action_dim: int = 32
 
-    # 30 (h30 variant) — matches the skill_segments_v1 plan.
+    # Default action-chunk horizon; benchmark recipes may override it.
     action_horizon: int = 30
 
     # π0.5 mode (state goes through discrete language tokens, action expert uses adaRMS).
@@ -67,11 +57,7 @@ class Pi0SixHeadConfig(pi0_config.Pi0Config):
 
     # ----- training-side enhancements -----
 
-    # Multi-step flow matching: sample N (noise, time) tuples per VLM forward
-    # and average their MSE. Champion uses 15. Phase 2 — for v1 keep at 1
-    # (each train step does the canonical single-noise flow matching loss).
-    # When > 1, requires the kv-cache-shared forward path described in
-    # ``Pi0SixHead.compute_loss_for_expert`` (TODO).
+    # Number of noise/time samples per flow-matching loss evaluation.
     num_flow_samples: int = 1
 
     # Correlated noise: sample noise from N(0, β·I + (1-β)·Σ) where Σ is the
@@ -130,24 +116,12 @@ class Pi0SixHeadConfig(pi0_config.Pi0Config):
         return observation_spec, action_spec
 
     def get_freeze_filter(self) -> nnx.filterlib.Filter:
-        """Strategy (c) — full backprop with vision frozen.
+        """Freeze the vision encoder while training the language backbone and experts.
 
-        Only SigLIP (vision encoder) is frozen. PaliGemma backbone and all 6
-        action expert towers + IO projections are trainable. Action gradients
-        flow naturally back through the VLM (no Knowledge Insulation, no FAST
-        auxiliary). The natural-language prompt path provides direct
-        supervision for the VLM via cross-entropy through PaliGemma's
-        pretrained head, so we don't need FAST tokens as the only VLM signal
-        (which is what the b1k champion needed because they replaced text
-        with task embeddings).
-
-        Memory note: this enables ~5.5B trainable params, which on fp32 +
-        AdamW requires multi-GPU FSDP (~28 GB per GPU on a 4-card setup).
-        Single-GPU is OOM at this scale — use the b1k 4-stage filter
-        (`_task0_action_expert_freeze_filter`) for single-GPU baselines.
-        """
+        LoRA variants use the base configuration's adapter filter. RoboCasa joint
+        training overrides this filter with nnx.Nothing() to train the full VLM."""
         # LoRA case: defer to base filter so LoRA-adapter-only training works.
         if "lora" in self.paligemma_variant or "lora" in self.action_expert_variant:
             return super().get_freeze_filter()
-        # Strategy (c): freeze only vision (SigLIP); everything else trainable.
+        # Freeze only the SigLIP vision encoder.
         return nnx_utils.PathRegex(".*img.*")

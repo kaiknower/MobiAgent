@@ -69,7 +69,7 @@ class Pi0(_model.BaseModel):
         self.pi05 = config.pi05
         paligemma_config = _gemma.get_config(config.paligemma_variant)
         action_expert_config = _gemma.get_config(config.action_expert_variant)
-        # TODO: rewrite gemma in NNX. For now, use bridge.
+        # Bridge the Gemma module into NNX.
         llm = nnx_bridge.ToNNX(
             _gemma.Module(
                 configs=[paligemma_config, action_expert_config],

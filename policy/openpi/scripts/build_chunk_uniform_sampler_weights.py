@@ -27,9 +27,9 @@ inspection.
 Usage:
 
     python scripts/build_chunk_uniform_sampler_weights.py \
-        --segments /path/to/skill_segments_v1_5tasks_v12/segments.jsonl \
+        --segments /path/to/skill_segments/segments.jsonl \
         --action-horizon 30 \
-        --output /path/to/skill_segments_v1_5tasks_v12/sampler_weights_chunk_uniform.json
+        --output /path/to/skill_segments/sampler_weights_chunk_uniform.json
 
 Then point `SkillSegmentsDataConfig.sampler_weights_path` at the output file.
 """
@@ -98,7 +98,7 @@ def main() -> int:
             per_head_chunks[head] += n_chunks
             per_head_seg_lens[head].append(n_frames)
 
-    # Sort heads canonically (matches v11_e1 / v12_e1 phase ordering).
+    # Sort heads in canonical expert order.
     canonical_order = ["move_to", "pick_up_from", "place_in", "place_on", "open", "close"]
     print(f"\n{'head':>14s} {'segments':>10s} {'total chunks':>13s} {'avg seg_len':>12s} {'min':>5s} {'max':>5s}")
     print("-" * 70)

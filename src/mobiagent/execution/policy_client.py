@@ -64,10 +64,8 @@ LEFT_RGB_KEY  = "robot_r1::robot_r1:left_realsense_link:Camera:0::rgb"
 RIGHT_RGB_KEY = "robot_r1::robot_r1:right_realsense_link:Camera:0::rgb"
 PROPRIO_KEY   = "robot_r1::proprio"
 
-# Champion-aligned obs keys (b1k.shared.eval_b1k_wrapper.process_obs). Server's
-# BehaviorInputs._get_any() accepts both these and the older head_image/
-# left_wrist_image/right_wrist_image names, so this is a forward-compatible
-# rename — old recordings / probes still resolve.
+# BEHAVIOR observation keys. BehaviorInputs also accepts the
+# head_image, left_wrist_image and right_wrist_image aliases.
 OPENPI_HEAD_KEY  = "observation/egocentric_camera"
 OPENPI_LEFT_KEY  = "observation/wrist_image_left"
 OPENPI_RIGHT_KEY = "observation/wrist_image_right"
@@ -126,7 +124,7 @@ def build_policy_observation(
 ) -> dict[str, Any]:
     """Build the dict that goes over the wire. Mirrors pi05_policy_bridge but
     also stamps prompt + stage_override (= stage_hint as int)."""
-    # Accept champion names (egocentric_camera / wrist_image_left/right) plus
+    # Accept BEHAVIOR names (egocentric_camera / wrist_image_left/right) plus
     # the legacy head_image / left_wrist_image / right_wrist_image names so
     # in-flight artifacts and older clients still work.
     head = _find_first(obs, (OPENPI_HEAD_KEY,  "observation/head_image",         HEAD_RGB_KEY))
@@ -411,10 +409,8 @@ class WebsocketPolicyClient:
         if actions.ndim == 1:
             actions = actions[None, :]
 
-        # Save the full PHYSICAL chunk (pre-truncation) as the inpaint prior.
-        # v11_d5 uses use_per_timestamp_norm — feeding back normalized actions
-        # would be at the wrong scale (stats[26:29] vs stats[0:3]). Server now
-        # accepts physical actions and renormalizes them per the new positions.
+        # Save the physical chunk before truncation as the inpainting prior.
+        # The server normalizes the prior for its next chunk positions.
         if self._enable_inpaint and actions.ndim == 2:
             self._prev_actions_raw = actions.copy()
 
@@ -438,25 +434,11 @@ class WebsocketPolicyClient:
 
 
 class CompressionPolicyClient:
-    """Champion-style action-chunk time compression wrapper. Mirrors
-    `B1KPolicyWrapper._interpolate_actions` from the actual b1k src
-    (`/behavior-1k-solution/src/b1k/shared/eval_b1k_wrapper.py:215-227`).
+    """Resample action chunks to a configured number of control steps.
 
-    Each `request_chunk()` call:
-      1. Calls the underlying client to get the action chunk it would
-         normally return (the base WebsocketPolicyClient already truncates
-         to `actions_to_execute=26` when inpaint is on, and saves
-         `actions[26:30]` as the inpaint prior for the next call).
-      2. Resamples the chunk along the time axis from `len(actions)` to
-         `execute_in_n_steps` (default 20) via per-dim cubic spline.
-      3. Scales the base-velocity dims `[:, :3]` by the compression factor
-         (`len/n_steps`, default 26/20 = 1.3) so the base actually moves the
-         same physical distance in fewer sim steps.
-
-    Net effect: the robot replays the same trained motion ~30% faster, and
-    the policy is re-queried every `execute_in_n_steps` sim steps instead
-    of every `actions_to_execute` sim steps.
-    """
+    Cubic splines interpolate each action dimension. Velocity channels are
+    scaled by the input/output chunk-length ratio to preserve displacement.
+    The wrapped client retains responsibility for prediction and inpainting."""
 
     def __init__(
         self,

@@ -13,24 +13,24 @@ from typing import Any, Literal
 ActionType = Literal["navigation", "manipulation"]
 StageHint = Literal[
     "move_to", "pick_up_from",
-    "place_in", "place_on", "open", "close",     # v13 6-head names
-    "place", "open_close",                         # v15 4-head merged names
+    "place_in", "place_on", "open", "close",     # Six-expert names
+    "place", "open_close",                         # Four-expert merged names
 ]
 JudgeVerdict = Literal["complete", "incomplete", "error"]
 JudgeFollowup = Literal["next", "retry", "replan_plan_deviated", "replan_keep_pose", ""]
 
 CANONICAL_STAGE_HINTS: tuple[str, ...] = (
-    # v13 6-head canonical stages
+    # Six-expert canonical stages
     "move_to",
     "pick_up_from",
     "place_in",
     "place_on",
     "open",
     "close",
-    # v15 4-head merged stages: place_in+place_on → place ; open+close → open_close
+    # Four-expert merged stages: place_in+place_on → place ; open+close → open_close
     "place",
     "open_close",
-    # v15 1-head single expert ("action"): all skills route to this head (id 0)
+    # Single-expert configuration: all skills route to action (id 0)
     "action",
 )
 
@@ -39,20 +39,11 @@ CANONICAL_STAGE_HINTS: tuple[str, ...] = (
 EXPLORE_STAGE = "explore"
 PLANNER_STAGE_HINTS: tuple[str, ...] = CANONICAL_STAGE_HINTS + ("navigate", "pnp", "switch", "manipulate")
 
-# Server-side multi-head model routes by integer stage_hint via
-# StageHintToSkillCanonicalId in skill_segment_policy.py. The order MUST match
-# the server's expert array order.
-#
-# Dual layout: v13 6-head and v15 4-head share the same int slots 0..3 by
-# design (move_to=0, pick_up_from=1, "place-like"=2, "open/close-like"=3),
-# and the v13-only stages keep their original 4..5 slots. So:
-#   - v15 4-head server: send "place" (2) and "open_close" (3). The v13 names
-#     `place_in/place_on/open/close` will MISROUTE on a v15 server
-#     (`place_on`→3=open_close, `open`/`close` exceed the 4-expert range).
-#   - v13 6-head server: send `place_in/place_on/open/close`. Sending v15
-#     names also works because `place`→2 still hits `place_in`, but
-#     `open_close`→3 will hit `place_on` (wrong).
-# Picking the right name is the caller's responsibility.
+# Integer routing must match the policy server's expert order.
+# Six-expert layout: move_to, pick_up_from, place_in, place_on, open, close.
+# Four-expert layout: move_to, pick_up_from, place, open_close.
+# Single-expert layout: action. Shared integer slots have different meanings
+# between layouts; callers must use names matching their checkpoint.
 STAGE_HINT_TO_INT: dict[str, int] = {
     "move_to":      0,
     "pick_up_from": 1,
@@ -60,27 +51,20 @@ STAGE_HINT_TO_INT: dict[str, int] = {
     "place_on":     3,
     "open":         4,
     "close":        5,
-    "place":        2,  # v15 4-head: merged place head shares slot 2 with v13's place_in
-    "open_close":   3,  # v15 4-head: merged open_close head shares slot 3 with v13's place_on
-    "action":       0,  # v15 1-head single expert: server expert_names=("action",), id 0
+    "place":        2,  # Merged place expert uses slot 2.
+    "open_close":   3,  # Merged open/close expert uses slot 3.
+    "action":       0,  # Single action expert uses slot 0.
 }
-# Reverse map: dict-comprehension keeps the LAST insertion per int, so v15 names
-# win for slots 2/3. That's fine — reverse map is only used for display/logging
-# (no live routing reads it), and v15 is the current model generation.
+# Display-only reverse map: later aliases take precedence for shared slots.
 STAGE_INT_TO_HINT: dict[int, str] = {v: k for k, v in STAGE_HINT_TO_INT.items()}
 
 
 def build_full_prompt(global_goal: str, skill_text: str) -> str:
-    """Assemble the runtime prompt the policy server expects.
+    """Assemble a policy prompt using CLAW_PROMPT_STYLE.
 
-    Two styles, selected by env var CLAW_PROMPT_STYLE:
-      - "skill_only" (v17 and later): the wire prompt is JUST the bare skill
-        description, e.g. ``move to radio``. v17 training data is skill-only
-        (the JSONL `task_instruction` field already holds only the skill text).
-      - "task_then_now" (v15/v16, default): ``"<task>. Now: <skill>."`` —
-        the task instruction followed by the skill.
-    Trailing whitespace + periods are stripped from each part.
-    """
+    ``skill_only`` returns the skill description. ``task_then_now`` combines
+    the task instruction and skill as "<task>. Now: <skill>.". Trailing
+    whitespace and periods are stripped from each input."""
     skill = (skill_text or "").rstrip(". ")
     style = os.environ.get("CLAW_PROMPT_STYLE", "task_then_now").strip().lower()
     if style == "skill_only":

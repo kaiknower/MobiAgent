@@ -166,13 +166,12 @@ class BehaviorSegmentDataConfig(DataConfigFactory):
 
 @dataclasses.dataclass(frozen=True)
 class SkillSegmentsDataConfig(DataConfigFactory):
-    """DataConfigFactory for the 6-head skill_segments_v1 plan.
+    """Data configuration for routed skill-segment training.
 
-    Reads pre-sliced ``head__*.jsonl`` shards (built by Claw's
-    ``split_per_head.py``). Pairs with :class:`StratifiedWeightedBatchSampler`
+    Reads pre-sliced ``head__*.jsonl`` shards (built by ``scripts/data/split_per_head.py``). Pairs with :class:`StratifiedWeightedBatchSampler`
     to feed Pi0SixHead with stratified batches.
 
-    Action representation (matches b1k champion's mixed-mask scheme):
+    Action representation:
     - dims 0-2 (base velocity): **absolute** (already a velocity)
     - dims 3-5 (trunk first 3 joints): **delta** from current state
     - dim 6  (trunk 4th joint, e.g. trunk lift): **absolute**
@@ -303,15 +302,10 @@ class TrainConfig:
             raise ValueError('Cannot resume and overwrite at the same time.')
 
 def _six_head_freeze_paligemma_backbone_filter() -> Filter:
-    """Freeze SigLIP vision tower + PaliGemma LLM backbone.
+    """Freeze the vision and language backbone for BEHAVIOR expert training.
 
-    Trainable: 6 action experts (gemma_300m × 6, paths matching `_[1-6]` suffix)
-    + IO projections (action_in_projs, action_out_projs, time_mlp_ins, time_mlp_outs)
-    + subtask_head. ~1.8B trainable vs 5B for full backprop.
-
-    Used because 5B full-backprop's FSDP working buffer (~38 GB single alloc =
-    2× full-size param) does not fit on 40GB cards even at batch=6/GPU.
-    """
+    Action expert towers, their input/output projections and the subtask head
+    remain trainable."""
     return nnx.Any(nnx_utils.PathRegex('.*img.*'), nnx.All(nnx_utils.PathRegex('.*llm.*'), nnx.Not(nnx_utils.PathRegex('.*llm.*_[1-6].*'))))
 
 # Portable baseline recipes; dataset and checkpoint locations are user supplied.

@@ -412,17 +412,11 @@ def compute_skill_segments_norm_stats(
     horizon = config.model.action_horizon
     print(f"[norm_stats] horizon={horizon}, skill_dir={skill_dir}", flush=True)
 
-    # Dense sliding-window sampling within segment bounds (stride=1) with
-    # 10% per-segment subsampling, parallelized across parquets via
-    # ProcessPoolExecutor (mirrors champion BEHAVIOR-1K compute_norm_stats).
-    # Origin of fix: the prior 1-window-per-segment implementation captured
-    # only ~4% of frames for v12 long segments and missed the gripper
-    # transition — open dim 22 stats came out (mean=1, std=0), blowing up
-    # loss to 7e9 at training. Dense+subsample covers the segment support;
-    # ProcessPool keeps wall time tractable on 13K segments.
+    # Sample sliding windows within segment bounds, subsample per segment,
+    # and process parquet files in parallel.
     SAMPLE_FRACTION = sample_fraction
     print(f"[norm_stats] sample_fraction={SAMPLE_FRACTION} ({'FULL' if SAMPLE_FRACTION >= 1.0 else 'subsampled'})", flush=True)
-    # Use canonical_heads from config (v15 4-head or 1-head custom), fall back to default constant.
+    # Use the configured expert order, falling back to the default.
     canonical_heads = data_config.skill_segments_canonical_heads or CANONICAL_HEADS
     print(f"[norm_stats] canonical_heads = {canonical_heads}", flush=True)
     print(f"[norm_stats] constructing SkillSegmentDataset...", flush=True)
@@ -556,19 +550,16 @@ def main(
     compute_correlation: bool = False,
     sample_fraction: float = 0.1,
 ):
-    """Compute normalization stats.
+    """Compute normalization statistics.
 
     Args:
-        config_name: TrainConfig registry name (e.g. ``pi05_skill_segments_v1_6head``).
-        max_frames: Optional cap on the number of segments processed.
-        compute_correlation: When True, also compute per-expert action
-            correlation matrices (Σ) for the b1k-style correlated-noise
-            sampler. Skill_segments path only. Off by default — only needed
-            when ``model.correlation_beta < 1.0``. Adds ~95% to runtime.
-        sample_fraction: Per-segment chunk subsample fraction (0..1) for
-            skill_segments path. Default 0.1 (matches champion BEHAVIOR-1K).
-            Pass 1.0 for full computation (no subsample, most accurate, ~10x slower).
-    """
+        config_name: Training configuration name, such as ``mobiagent_behavior``.
+        max_frames: Optional cap on segments processed.
+        compute_correlation: Also compute per-expert action correlation matrices
+            for correlated-noise sampling when ``model.correlation_beta < 1.0``.
+            Available for skill-segment datasets; disabled by default.
+        sample_fraction: Fraction of chunk windows sampled per segment.
+            Defaults to 0.1; use 1.0 to include all windows."""
     config = _config.get_config(config_name)
     data_config = config.data.create(config.assets_dirs, config.model)
 
