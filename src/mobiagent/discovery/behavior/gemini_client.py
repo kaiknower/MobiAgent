@@ -191,40 +191,6 @@ def run_native_gemini_inference(
         except Exception:
             text = ""
     text = text or ""
-    debug_dir = os.getenv("CLAW_GEMINI_DEBUG_DIR", "").strip()
-    if debug_dir:
-        try:
-            finish_reason = "?"
-            usage = {}
-            try:
-                finish_reason = str(response.candidates[0].finish_reason)
-            except Exception:
-                pass
-            try:
-                um = response.usage_metadata
-                usage = {
-                    "prompt_tokens": getattr(um, "prompt_token_count", None),
-                    "candidates_tokens": getattr(um, "candidates_token_count", None),
-                    "total_tokens": getattr(um, "total_token_count", None),
-                    "thoughts_tokens": getattr(um, "thoughts_token_count", None),
-                }
-            except Exception:
-                pass
-            ts = time.strftime("%Y%m%d_%H%M%S")
-            ddir = __import__("pathlib").Path(debug_dir)
-            ddir.mkdir(parents=True, exist_ok=True)
-            (ddir / f"resp_{ts}_{model}.txt").write_text(text, encoding="utf-8")
-            (ddir / f"resp_{ts}_{model}.meta.json").write_text(
-                __import__("json").dumps({
-                    "finish_reason": finish_reason,
-                    "text_chars": len(text),
-                    "max_output_tokens": max_output_tokens,
-                    "usage": usage,
-                }, indent=2),
-                encoding="utf-8",
-            )
-        except Exception:
-            pass
     return text
 
 

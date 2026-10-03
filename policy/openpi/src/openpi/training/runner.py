@@ -1,9 +1,5 @@
-# NOTE: pandas must be imported BEFORE torch / openpi.models.model on this
-# machine. torch (loaded via openpi.models.model) brings in a libstdc++/libgomp
-# whose dlopen ordering corrupts pandas's later native-extension load (segfault
-# in pandas/_libs/pandas_parser.so). Reordering avoids the crash; functionally
-# identical otherwise (pandas is imported eventually via the data loader).
-import pandas as _pandas_preload  # noqa: F401  -- order-of-import fix
+# Preload pandas before the model backend to avoid native-library import conflicts.
+import pandas as _pandas_preload  # noqa: F401
 
 import dataclasses
 import functools

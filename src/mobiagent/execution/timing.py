@@ -27,16 +27,14 @@ def acc(key: str, count_key: str | None = None):
         T[key] += time.perf_counter() - t0
         if count_key:
             T[count_key] += 1
-        _dump()  # persist after every infer/planner/judge (survives shutdown segfault)
+        _dump()
 
 
 def add_phys_render(t_phys: float, t_render: float, n: int = 1) -> None:
     T["phys"] += t_phys
     T["render"] += t_render
     T["n_steps"] += n
-    # Write incrementally (every 50 steps) so a shutdown SEGFAULT — which bypasses
-    # atexit — does not lose the breakdown. By the time the sim shuts down all
-    # stepping is already on disk.
+    # Persist timings periodically, including before shutdown.
     if T["n_steps"] % 50 == 0:
         _dump()
 
