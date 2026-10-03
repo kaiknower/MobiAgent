@@ -2,6 +2,7 @@ import base64
 import cv2
 import json
 import os
+import shutil
 import subprocess
 import traceback
 from dataclasses import asdict
@@ -199,6 +200,7 @@ def _build_video_context(
 ) -> dict[str, object]:
     context: dict[str, object] = {
         "task_id": task_id,
+        "time_scale": VIDEO_PLAYBACK_TIME_SCALE,
     }
     if task_average_source_duration_sec is not None:
         context["task_average_source_duration_sec"] = round(float(task_average_source_duration_sec), 2)
@@ -231,14 +233,22 @@ def _build_task_average_source_durations(selected_demos: list[object]) -> dict[s
 def _backfill_segment_frames_from_times(*, prediction: dict, source_video: Path) -> dict:
     capture = cv2.VideoCapture(str(source_video))
     fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
+    n_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
     capture.release()
+    if n_frames <= 0:
+        raise ValueError(f"Unable to read video frame count: {source_video}")
+    time_scale = float(prediction.get("video_context", {}).get("time_scale", VIDEO_PLAYBACK_TIME_SCALE))
     for segment in prediction.get("skill_timeline", []):
         if not isinstance(segment, dict):
             continue
         if "start_time_sec" not in segment or "end_time_sec" not in segment:
             continue
-        segment["start_frame"] = int(round(float(segment["start_time_sec"]) * fps))
-        segment["end_frame"] = int(round(float(segment["end_time_sec"]) * fps))
+        # Model timestamps refer to the accelerated playback labels; clips
+        # are cut from the original-speed composite video.
+        start = int(round(float(segment["start_time_sec"]) * time_scale * fps))
+        end = int(round(float(segment["end_time_sec"]) * time_scale * fps))
+        segment["start_frame"] = max(0, min(start, n_frames))
+        segment["end_frame"] = max(0, min(end, n_frames))
     return prediction
 
 
@@ -1330,6 +1340,7 @@ def _run_single_demo_prediction(
 
 
 def _write_live_timeline_review(*, run_dir: Path, predictions: list[dict]) -> None:
+    write_jsonl(run_dir / "predictions" / "demo_skill_predictions.jsonl", predictions)
     write_timeline_review(
         run_dir / "review" / "timeline_review.txt",
         build_review_rows(predictions),
@@ -1356,6 +1367,8 @@ def run_demo_skill_discovery(
 
     run_dir = _create_run_dir(output_root)
     manifests_dir = run_dir / "manifests"
+    instructions_path = manifests_dir / "task_instructions.json"
+    instructions_path.write_text(json.dumps(task_instruction_by_task_id, indent=2), encoding="utf-8")
 
     selected_demos_payload = [
         {
@@ -1386,6 +1399,8 @@ def run_demo_skill_discovery(
         artifact_paths = write_demo_skill_outputs(run_dir=run_dir, predictions=[])
     else:
         try:
+            if (export_segment_clips or _has_video_inference_api_key()) and shutil.which("ffmpeg") is None:
+                raise RuntimeError("ffmpeg is required for video compression and clip export; install it and add it to PATH")
             predictions = []
             selected_demo_by_episode_id = {}
             exported_segment_clips: list[dict] = []
@@ -1438,6 +1453,7 @@ def run_demo_skill_discovery(
     result: dict[str, object] = {
         "run_dir": str(run_dir),
         "manifest_path": str(manifest_path),
+        "instructions_path": str(instructions_path),
         "log_path": str(log_path),
         "inference_status": inference_status,
         "selected_demo_count": len(selected_demos),

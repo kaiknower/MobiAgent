@@ -32,7 +32,8 @@ outcome is training-ready data from raw demonstrations.
 
    ```bash
    mobiagent-discover --platform behavior --dataset-root /path/to/behavior \
-     --tasks task-0001 task-0003 --output-root outputs/discovery/behavior
+     --tasks task-0001 task-0003 --output-root outputs/discovery/behavior \
+     --export-segment-clips
    ```
 
 3. Read the returned `inference_status`, `selected_demo_count`, `run_dir`, and
@@ -49,16 +50,18 @@ Use the paths returned by the pipeline; do not assume a `latest/` directory exis
 A run includes:
 
 - `manifests/selected_demos.json`: selected episodes.
+- `manifests/task_instructions.json`: task-instruction mapping for training-data export.
 - `predictions/demo_skill_predictions.jsonl`: temporal skill predictions.
 - `review/`: timeline and readable annotations.
 - `final/demo_skills.jsonl`: skill records.
 - `clusters/`: frequency and semantic grouping artifacts.
+- `segments/`: source-speed clips and their frame manifest when
+  `--export-segment-clips` is enabled.
 
 ## Training-data export
 
-Use the discovery predictions as the input for this stage. The discovery pipeline
-does not create the task-instruction mapping expected by the segment builder;
-supply that mapping separately.
+Use the discovery predictions and the returned `instructions_path` as inputs for
+this stage. For predictions from another tool, supply a task-instruction mapping.
 
 ### Inputs and data contract
 
