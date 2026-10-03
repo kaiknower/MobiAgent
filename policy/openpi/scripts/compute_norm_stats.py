@@ -16,10 +16,9 @@ import tyro
 import openpi.models.model as _model
 import openpi.policies.behavior_policy as behavior_policy
 import openpi.shared.normalize as normalize
-from openpi.training.behavior_segment_dataset import ManifestRow
+from openpi.training.behavior_segment_dataset import ManifestRow, classify_task0_row
 import openpi.training.config as _config
 import openpi.training.data_loader as _data_loader
-from openpi.training.task0_stage_training import classify_task0_row
 import openpi.transforms as transforms
 
 
@@ -249,11 +248,14 @@ def _process_parquet_for_skill_norm_stats(args):
     horizon_offsets = np.arange(horizon, dtype=np.int64)
 
     starts_chunks: list[np.ndarray] = []
+    ends_chunks: list[np.ndarray] = []
     canon_chunks: list[np.ndarray] = []
     for s_idx, e_idx, canon in segment_data:
         seg_start = max(0, min(int(s_idx), n_rows - 1))
         seg_end = max(seg_start, min(int(e_idx), n_rows))
         seg_len = seg_end - seg_start
+        if seg_len <= 0:
+            continue
         if seg_len <= horizon:
             seg_starts = np.array([seg_start], dtype=np.int64)
         else:
@@ -264,6 +266,7 @@ def _process_parquet_for_skill_norm_stats(args):
                     sel = rng.choice(seg_starts.size, n_keep, replace=False)
                     seg_starts = np.sort(seg_starts[sel])
         starts_chunks.append(seg_starts)
+        ends_chunks.append(np.full(seg_starts.size, seg_end - 1, dtype=np.int64))
         canon_chunks.append(np.full(seg_starts.size, canon, dtype=object))
 
     if not starts_chunks:
@@ -271,7 +274,7 @@ def _process_parquet_for_skill_norm_stats(args):
     starts = np.concatenate(starts_chunks)
     canons = np.concatenate(canon_chunks)
 
-    idxs = np.minimum(starts[:, None] + horizon_offsets[None, :], n_rows - 1)
+    idxs = np.minimum(starts[:, None] + horizon_offsets[None, :], np.concatenate(ends_chunks)[:, None])
     state_batch = behavior_policy.extract_behavior_state(states[starts])  # (n, 23)
     action_batch = actions_full[idxs]  # (n, H, 23)
 
@@ -453,10 +456,7 @@ def compute_skill_segments_norm_stats(
         args_list.append((parquet_path, seg_data, delta_mask, horizon, SAMPLE_FRACTION, seed, use_per_frame_state_delta))
     print(f"[norm_stats] built args_list with {len(args_list)} entries", flush=True)
 
-    # Force sequential: ProcessPool with N=96 workers had startup hang in
-    # this codebase (likely fork of 1.7GB JAX-loaded parent + worker import
-    # of behavior_policy). Sequential with lightweight aggregation is ~3-5
-    # min for 13K segs, fast enough.
+    # Process one parquet at a time to bound memory usage.
     use_parallel = False
     num_workers = min(mp.cpu_count(), max(1, len(args_list) // 2))
     print(

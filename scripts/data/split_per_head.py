@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from collections import Counter
 from pathlib import Path
 
@@ -37,6 +38,8 @@ def main() -> int:
     p.add_argument("--out-dir", default=str(OUT_DIR))
     p.add_argument("--alpha", type=float, default=ALPHA)
     args = p.parse_args()
+    if not math.isfinite(args.alpha) or args.alpha < 0:
+        p.error("--alpha must be finite and nonnegative")
 
     in_path = Path(args.in_path)
     out_dir = Path(args.out_dir)
@@ -44,11 +47,19 @@ def main() -> int:
     rows: list[dict] = []
     dropped_other = 0
     dropped_short = 0
+    seen_ids: set[str] = set()
     for line in in_path.open():
         line = line.strip()
         if not line:
             continue
         r = json.loads(line)
+        sample_id = r.get("sample_id")
+        if not isinstance(sample_id, str) or not sample_id.strip() or sample_id in seen_ids:
+            raise ValueError(f"Missing or duplicate sample_id: {sample_id!r}")
+        seen_ids.add(sample_id)
+        start, end, length = (r.get(key) for key in ("start_idx_30hz", "end_idx_30hz", "n_frames"))
+        if any(type(value) is not int for value in (start, end, length)) or start < 0 or end <= start or length != end - start:
+            raise ValueError(f"Invalid frame interval for {sample_id}")
         if r.get("skill_canonical") == "other":
             dropped_other += 1
             continue

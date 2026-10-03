@@ -158,6 +158,9 @@ class Policy(BasePolicy):
             "state": inputs["state"],
             "actions": self._sample_actions(sample_rng_or_pytorch_device, observation, **sample_kwargs),
         }
+        if "skill_canonical_ids" in inputs:
+            # Denormalization must use the same expert as action sampling.
+            outputs["skill_canonical_ids"] = inputs["skill_canonical_ids"]
         model_time = time.monotonic() - start_time
         if self._is_pytorch_model:
             outputs = jax.tree.map(lambda x: np.asarray(x[0, ...].detach().cpu()), outputs)

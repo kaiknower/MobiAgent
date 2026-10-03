@@ -56,3 +56,7 @@ class WebsocketClientPolicy(_base_policy.BasePolicy):
     @override
     def reset(self) -> None:
         pass
+
+    def close(self) -> None:
+        """Release the connection when a simulation episode finishes."""
+        self._ws.close()

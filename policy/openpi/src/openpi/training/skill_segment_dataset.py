@@ -132,6 +132,9 @@ class SkillSegmentRow:
     @classmethod
     def from_dict(cls, d: dict) -> "SkillSegmentRow":
         # Tolerate extra fields (start_time_sec_source / end_time_sec_source / etc.)
+        start, end, length = (d[key] for key in ("start_idx_30hz", "end_idx_30hz", "n_frames"))
+        if any(type(value) is not int for value in (start, end, length)) or start < 0 or end <= start or length != end - start:
+            raise ValueError(f"Invalid frame interval for {d.get('sample_id')}")
         return cls(
             sample_id=d["sample_id"],
             task_id=d["task_id"],
@@ -531,7 +534,9 @@ class SkillSegmentDataset(Dataset):
         # Clamp action window: short segments (n_frames <= H) start at
         # start_idx_30hz; we pad the tail by repeating the last frame's
         # parquet row so that downstream shape is always (H, 23).
-        idxs = [min(start_idx + k, n_rows - 1) for k in range(H)]
+        if row.end_idx_30hz > n_rows:
+            raise ValueError(f"Segment exceeds parquet length: {row.sample_id}")
+        idxs = [min(start_idx + k, row.end_idx_30hz - 1) for k in range(H)]
         state_idx = min(start_idx, n_rows - 1)
 
         state = state_arr[state_idx].astype(np.float32, copy=False)  # (256,)

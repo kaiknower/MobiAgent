@@ -70,7 +70,9 @@ supply that mapping separately.
 - Destination directory for segments and expert shards.
 
 The builder assumes 30 Hz action data and maps compressed video time to source
-frames before clamping segment ends to the parquet row count. Resolve incompatible
+frames before clamping both endpoints to the parquet row count. Intervals use
+an inclusive start and exclusive end. Missing sources, instructions and duplicate
+sample IDs fail before any outputs are written. Resolve incompatible
 sampling rates before running this workflow.
 
 ### Workflow

@@ -10,7 +10,7 @@ Temporal alignment:
   - 30 Hz action data (verified via parquet num_rows == meta length)
   - source_time_sec = compressed_time * time_scale (default 5.0)
   - idx = round(source_time_sec * 30)
-  - cap end_idx at parquet num_rows
+  - clamp both endpoints to [0, parquet num_rows]; intervals are [start, end)
   - n_frames < 5 segments are flagged in a CSV diagnostic but kept in the JSONL
     (the per-expert splitting stage filters these segments)
   - skill_canonical derived from verb prefix (deterministic, 6 classes):
@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -33,7 +34,7 @@ from typing import Optional
 
 import pyarrow.parquet as pq
 
-# Default paths assume the laptop layout. Override per machine via --in / --out
+# Default paths are relative to the repository. Override via --in / --out
 # / --dataset-root / --instructions-path CLI flags or env vars.
 INPUT_PATH = Path(os.getenv("MOBIAGENT_PREDICTIONS",
     "data/segments/predictions.jsonl"))
@@ -46,7 +47,7 @@ SHORT_CSV = Path(os.getenv("CLAW_SHORT_DIAG",
 
 DATASET_ROOT = Path(os.getenv("CLAW_DATASET_ROOT", "data/behavior"))
 INSTRUCTIONS_PATH = Path(os.getenv("CLAW_TASK_INSTRUCTIONS",
-    "outputs/discovery/behavior/latest/manifests/task_instructions.json"))
+    "configs/task_instructions.json"))
 FPS = 30
 
 
@@ -133,6 +134,8 @@ def main() -> int:
     per_task_counter: dict[str, dict] = {}
     missing_paths: list[str] = []
     canonical_counter: dict[str, int] = {}
+    sample_ids: set[str] = set()
+    validation_errors: list[str] = []
 
     for line in in_path.open():
         line = line.strip()
@@ -141,13 +144,31 @@ def main() -> int:
         rec = json.loads(line)
         task_id = rec["task_id"]
         episode_id = rec["episode_id"]
-        time_scale = rec.get("video_context", {}).get("time_scale", 5.0) or 5.0
+        time_scale = float(rec.get("video_context", {}).get("time_scale", 5.0))
+        if not math.isfinite(time_scale) or time_scale <= 0:
+            raise ValueError(f"{task_id}/{episode_id}: time_scale must be finite and positive")
         instruction = instructions.get(task_id, "")
+        if not isinstance(instruction, str) or not instruction.strip():
+            validation_errors.append(f"Missing task instruction for {task_id}")
 
         paths = paths_for(task_id, episode_id)
+        missing = False
         for k, pth in paths.items():
-            if not pth.exists():
+            if not pth.is_file():
                 missing_paths.append(f"{task_id}/{episode_id} :: {k} -> {pth}")
+                missing = True
+        if missing:
+            continue
+        try:
+            n_rows = parquet_rows_cached(paths["parquet"], parquet_rows_cache)
+            if n_rows <= 0:
+                raise ValueError("empty parquet")
+            meta = json.loads(paths["meta"].read_text())
+            if "length" in meta and int(meta["length"]) != n_rows:
+                raise ValueError(f"meta length {meta['length']} != parquet rows {n_rows}")
+        except Exception as exc:
+            validation_errors.append(f"{task_id}/{episode_id}: {exc}")
+            continue
 
         # Sanity: one parquet per task, log num_rows
         if task_id not in seen_tasks and paths["parquet"].exists():
@@ -167,30 +188,33 @@ def main() -> int:
             desc = seg.get("skill_description", "")
             if not isinstance(desc, str) or not desc.strip():
                 continue
-            seg_id = str(seg.get("segment_id", "?"))
+            if seg.get("segment_id") is None or not str(seg["segment_id"]).strip():
+                validation_errors.append(f"{task_id}/{episode_id}: missing segment_id")
+                continue
+            seg_id = str(seg["segment_id"])
             try:
                 s_compressed = float(seg["start_time_sec"])
                 e_compressed = float(seg["end_time_sec"])
             except (KeyError, TypeError, ValueError):
+                validation_errors.append(f"{task_id}/{episode_id}/{seg_id}: invalid timestamps")
+                continue
+            if not all(math.isfinite(x) for x in (s_compressed, e_compressed)) or e_compressed <= s_compressed:
+                validation_errors.append(f"{task_id}/{episode_id}/{seg_id}: invalid time interval")
                 continue
             s_source = s_compressed * time_scale
             e_source = e_compressed * time_scale
-            s_idx = int(round(s_source * FPS))
-            e_idx = int(round(e_source * FPS))
-
-            # Cap at parquet length if available
-            try:
-                n_rows = parquet_rows_cached(paths["parquet"], parquet_rows_cache)
-                if e_idx > n_rows:
-                    e_idx = n_rows
-            except Exception:
-                n_rows = None
+            s_idx = max(0, min(int(round(s_source * FPS)), n_rows))
+            e_idx = max(0, min(int(round(e_source * FPS)), n_rows))
 
             if e_idx <= s_idx:
                 continue
             n_frames = e_idx - s_idx
             canonical = derive_canonical(desc)
             sample_id = f"{task_id}/{episode_id}/{seg_id}"
+            if sample_id in sample_ids:
+                validation_errors.append(f"Duplicate sample_id: {sample_id}")
+                continue
+            sample_ids.add(sample_id)
 
             row = {
                 "sample_id": sample_id,
@@ -200,8 +224,8 @@ def main() -> int:
                 "task_instruction": instruction,
                 "skill_canonical": canonical,
                 "skill_description": desc,
-                "start_time_sec_source": round(s_source, 3),
-                "end_time_sec_source": round(e_source, 3),
+                "start_time_sec_source": round(s_idx / FPS, 3),
+                "end_time_sec_source": round(e_idx / FPS, 3),
                 "start_idx_30hz": s_idx,
                 "end_idx_30hz": e_idx,
                 "n_frames": n_frames,
@@ -248,8 +272,17 @@ def main() -> int:
         p90 = nf_sorted[int(len(nf_sorted)*0.9)]
         print(f"  {tid}: total={ts['total']:<5}  median_frames={p50:<4} p90={p90:<4}  by_canonical={ts['by_canonical']}")
 
+    if missing_paths or validation_errors:
+        for error in validation_errors[:10]:
+            print(error, file=sys.stderr)
+        print("Invalid source data; no outputs written.", file=sys.stderr)
+        return 1
+    if not rows:
+        print("No nonempty segments; no outputs written.", file=sys.stderr)
+        return 1
     if args.apply:
-        out_path.parent.mkdir(parents=True, exist_ok=True)
+        for path in (out_path, summary_path, short_csv_path):
+            path.parent.mkdir(parents=True, exist_ok=True)
         with out_path.open("w") as fh:
             for r in rows:
                 fh.write(json.dumps(r) + "\n")

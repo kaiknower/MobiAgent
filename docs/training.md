@@ -33,3 +33,7 @@ uv run scripts/serve_policy.py --config mobiagent_behavior \
 The BEHAVIOR recipe freezes the shared vision-language backbone and trains routed
 action experts. Batch sizes, schedules and data paths must be configured for the
 target run. Keep expert order and normalization identical in training and serving.
+
+BEHAVIOR segment intervals are `[start_idx_30hz, end_idx_30hz)`. Short action
+chunks repeat the final frame within their own skill segment; they never extend
+into the next skill. Normalization statistics use the same padding rule.
