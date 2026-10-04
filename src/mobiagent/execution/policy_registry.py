@@ -53,13 +53,19 @@ def _maybe_wrap_compression(client: PolicyClientProtocol) -> PolicyClientProtoco
     )
 from .schemas import CANONICAL_STAGE_HINTS
 
+# Merged and single-head names belong to alternative checkpoint layouts. They
+# must not become extra required servers for the documented six-server layout.
+_LEGACY_STAGE_HINTS = (
+    "move_to", "pick_up_from", "place_in", "place_on", "open", "close",
+)
+
 
 class PolicyRegistry:
     def __init__(self, clients: dict[str, PolicyClientProtocol], *, shared_client: PolicyClientProtocol | None = None) -> None:
         # When shared_client is set, all stage_hints route to the same client.
         # `clients` is still populated (each key → the shared instance) so the
         # rest of the code path is uniform.
-        missing = [h for h in CANONICAL_STAGE_HINTS if h not in clients]
+        missing = [h for h in _LEGACY_STAGE_HINTS if h not in clients]
         if missing:
             raise ValueError(f"PolicyRegistry missing clients for stage_hints: {missing}")
         self._clients = clients
@@ -71,7 +77,7 @@ class PolicyRegistry:
 
     def select(self, stage_hint: str) -> PolicyClientProtocol:
         if stage_hint not in self._clients:
-            raise KeyError(f"unknown stage_hint: {stage_hint!r}; valid={CANONICAL_STAGE_HINTS}")
+            raise KeyError(f"unknown stage_hint: {stage_hint!r}; valid={tuple(self._clients)}")
         return self._clients[stage_hint]
 
     def close(self) -> None:
@@ -127,7 +133,9 @@ class PolicyRegistry:
         for h in CANONICAL_STAGE_HINTS:
             entry = cfg.get(h)
             if not entry:
-                raise ValueError(f"{config_path}: missing stage_hint {h!r} (and no `shared:` block)")
+                if h in _LEGACY_STAGE_HINTS:
+                    raise ValueError(f"{config_path}: missing stage_hint {h!r} (and no `shared:` block)")
+                continue
             base = WebsocketPolicyClient(
                 host=entry.get("host", "localhost"),
                 port=int(entry["port"]),
