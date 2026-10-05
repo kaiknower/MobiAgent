@@ -180,7 +180,7 @@ If you find MobiAgent useful in your research, please cite our paper:
 ```bibtex
 @misc{liu2026mobiagent,
   title={MobiAgent: Dual-Loop Recursive Policy Self-Improvement for Long-Horizon Mobile Manipulation},
-  author={Chenzhi Liu and Zhang Yue and Jiehong Lin and Jianan Wang and Bo Wang and Zhongrui Wang and Xiaojuan Qi},
+  author={Chenzhi Liu and Yue Zhang and Jiehong Lin and Jianan Wang and Bo Wang and Zhongrui Wang and Xiaojuan Qi},
   year={2026},
   eprint={2610.03476},
   archivePrefix={arXiv},
