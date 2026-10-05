@@ -14,7 +14,7 @@ Bo Wang<sup>1</sup> · Zhongrui Wang<sup>3,‡</sup> · Xiaojuan Qi<sup>1,‡</s
 <sup>*</sup> Equal contribution &nbsp; <sup>†</sup> Project leader &nbsp; <sup>‡</sup> Corresponding authors
 
 [![Project Overview](https://img.shields.io/badge/Project-Overview-3366cc?style=plastic&logo=googlechrome&logoColor=white)](https://kaiknower.github.io/mobiagent/)
-[![Paper: Coming soon](https://img.shields.io/badge/Paper-Coming_soon-b31b1b?style=plastic&logo=arxiv&logoColor=white)](#paper)
+[![Paper: arXiv](https://img.shields.io/badge/Paper-arXiv%3A2610.03476-b31b1b?style=plastic&logo=arxiv&logoColor=white)](https://arxiv.org/abs/2610.03476)
 [![RoboCasa Training Dataset](https://img.shields.io/badge/Training_Data-RoboCasa-ffcc4d?style=plastic&logo=huggingface)](https://robocasa.ai/docs/build/html/datasets/datasets_overview.html)
 [![Hugging Face Model Weights](https://img.shields.io/badge/Model_Weights-Hugging_Face-ffcc4d?style=plastic&logo=huggingface)](https://huggingface.co/Liukaikai/MobiAgent)
 
@@ -26,7 +26,7 @@ MobiAgent connects a deployment loop of **planning, skill execution, and visual 
 
 ## Paper
 
-The paper link will be added here when available.
+[Read the paper on arXiv](https://arxiv.org/abs/2610.03476).
 
 ## Model weights
 
@@ -182,8 +182,9 @@ If you find MobiAgent useful in your research, please cite our paper:
   title={MobiAgent: Dual-Loop Recursive Policy Self-Improvement for Long-Horizon Mobile Manipulation},
   author={Chenzhi Liu and Zhang Yue and Jiehong Lin and Jianan Wang and Bo Wang and Zhongrui Wang and Xiaojuan Qi},
   year={2026},
-  eprint={26xx.xxxxx}, % Replace with the final arXiv ID.
+  eprint={2610.03476},
   archivePrefix={arXiv},
-  primaryClass={cs.RO}
+  primaryClass={cs.RO},
+  url={https://arxiv.org/abs/2610.03476}
 }
 ```
