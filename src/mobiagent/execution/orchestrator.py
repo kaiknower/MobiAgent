@@ -107,6 +107,16 @@ class Orchestrator:
             self._abort_reason = 'no_current_subtask'
             return
         attempts = self.memory.attempts_per_subtask.get(st.id, 0)
+        control = None
+        execution_config = getattr(self.env, 'config', None)
+        if execution_config is not None:
+            import math
+            from mobiagent.environments.robocasa_control import AttemptControl
+            control = AttemptControl(execution_config, st, self._latest_obs)
+            st.max_retries = execution_config.retry_budget(st.stage_hint, st.prompt, st.max_retries)
+            self._chunks_per_attempt = execution_config.window(st.stage_hint, st.prompt)
+            effective_steps = execution_config.effective_steps(self.env.task_name, st.stage_hint, self._latest_obs)
+            self._chunks_per_attempt = math.ceil(self._chunks_per_attempt * execution_config.execute_steps / effective_steps)
         attempt = Attempt(subtask_id=st.id, attempt_number=attempts + 1, plan_revision=self.memory.current_plan.plan_revision, started_at=_now_iso())
         try:
             client = self.registry.select(st.stage_hint)
@@ -118,14 +128,51 @@ class Orchestrator:
             self._post_judge(st, attempt, fatal_for_run=True)
             return
         full_prompt = build_full_prompt(self.memory.current_plan.global_goal, st.prompt)
+        if control is not None:
+            full_prompt = st.prompt
+        cached_decision = None
+        start_obs = self._latest_obs
+        begin_attempt = getattr(self.env, 'begin_attempt', None)
+        if begin_attempt is not None:
+            begin_attempt(st)
+        attempt_frames = [start_obs]
         try:
             obs_after = self._latest_obs or {}
             _total_actions = 0
             for _ci in range(self._chunks_per_attempt):
-                chunk = client.request_chunk(obs=obs_after, prompt=full_prompt, stage_hint=st.stage_hint, timeout_s=self.chunk_timeout_s)
+                if control is not None and self.env.is_done():
+                    break
+                if control is not None and control.hold is not None:
+                    import numpy as np
+                    chunk = {'actions': np.repeat(control.hold[None, :], execution_config.execute_steps, axis=0)}
+                else:
+                    chunk = client.request_chunk(obs=obs_after, prompt=full_prompt, stage_hint=st.stage_hint, timeout_s=self.chunk_timeout_s)
                 _total_actions += len(chunk.get('actions', [])) if isinstance(chunk, dict) else 0
                 obs_after = self.env.step(chunk)
                 self._latest_obs = obs_after
+                attempt_frames.append(obs_after)
+                observe_attempt = getattr(self.env, 'observe_attempt', None)
+                if observe_attempt is not None:
+                    recovery_decision = observe_attempt(st, attempt.attempt_number)
+                    if recovery_decision is not None:
+                        cached_decision = recovery_decision
+                        break
+                if control is not None:
+                    trigger = control.observe(obs_after)
+                    if trigger == 'hold':
+                        control.hold = self.env.hold_action()
+                    elif trigger in ('visual', 'release'):
+                        from mobiagent.environments.robocasa_control import robot_info
+                        checkpoint = self.judge_fn(
+                            subtask=st, obs_after=obs_after,
+                            obs_prev=attempt_frames[len(attempt_frames) // 2], obs_mid=start_obs,
+                            robot_info=robot_info(obs_after, start_obs, control.pick_handoff),
+                            history=self.memory.history, plan=self.memory.current_plan,
+                            current_idx=self.memory.current_idx,
+                        )
+                        if trigger == 'release' or checkpoint.verdict == 'complete':
+                            cached_decision = checkpoint
+                            break
                 if self._chunk_done_hook is not None:
                     try:
                         self._chunk_done_hook(env=self.env, subtask=st, attempt_number=attempt.attempt_number, obs_after=obs_after)
@@ -150,10 +197,17 @@ class Orchestrator:
             self._post_judge(st, attempt)
             return
         obs_mid = self._prev2_obs_within_subtask
+        judge_previous = self._prev_obs_within_subtask
+        if control is not None:
+            obs_mid = start_obs
+            judge_previous = attempt_frames[len(attempt_frames) // 2]
         (_carry_side, _carry_item) = self._carry_hand_info(obs_after)
         robot_info = {'gripper_now': self._gripper_state_text(obs_after), 'gripper_prev': self._gripper_state_text(self._prev_obs_within_subtask), 'gripper_2back': self._gripper_state_text(obs_mid), 'gripper_cmd': self._gripper_cmd_text(chunk), 'carry_hand': _carry_side, 'carry_item': _carry_item}
+        if control is not None:
+            from mobiagent.environments.robocasa_control import robot_info as robocasa_robot_info
+            robot_info = robocasa_robot_info(obs_after, judge_previous, control.pick_handoff)
         try:
-            decision = self.judge_fn(subtask=st, obs_after=obs_after, obs_prev=self._prev_obs_within_subtask, obs_mid=obs_mid, robot_info=robot_info, history=self.memory.history, plan=self.memory.current_plan, current_idx=self.memory.current_idx)
+            decision = cached_decision or self.judge_fn(subtask=st, obs_after=obs_after, obs_prev=judge_previous, obs_mid=obs_mid, robot_info=robot_info, history=self.memory.history, plan=self.memory.current_plan, current_idx=self.memory.current_idx)
         except TypeError:
             try:
                 decision = self.judge_fn(subtask=st, obs_after=obs_after, obs_prev=self._prev_obs_within_subtask, obs_mid=obs_mid, history=self.memory.history, plan=self.memory.current_plan, current_idx=self.memory.current_idx)
@@ -165,6 +219,9 @@ class Orchestrator:
         except Exception as exc:
             decision = JudgeDecision(verdict='incomplete', reason=f'judge_fail: {exc}', evidence=[], recommended_followup='')
         attempt.judge = decision
+        after_attempt = getattr(self.env, 'after_attempt', None)
+        if after_attempt is not None:
+            after_attempt(st, decision)
         attempt.finished_at = _now_iso()
         self._record_attempt(attempt)
         self._prev2_obs_within_subtask = self._prev_obs_within_subtask
@@ -183,7 +240,10 @@ class Orchestrator:
         try:
             if self.env.is_done():
                 meta = (getattr(self.env, '_latest_obs', None) or {}).get('_meta', {})
-                self._abort_reason = 'env_truncated' if meta.get('truncated') else 'env_terminated'
+                if getattr(self.env, 'config', None) is not None and self.env.steps_used >= self.env.horizon:
+                    self._abort_reason = 'horizon_exhausted'
+                else:
+                    self._abort_reason = 'env_truncated' if meta.get('truncated') else 'env_terminated'
                 return True
         except (AttributeError, TypeError):
             pass
