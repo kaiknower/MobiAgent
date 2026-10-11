@@ -124,11 +124,12 @@ def main(argv=None, *, default_env="mock", default_policy_servers=None) -> int:
                     choices=["always_complete", "alternating", "fail_then_replan"])
     ap.add_argument("--policy-servers", default=default_policy_servers,
                     help="path to policy_servers.yaml (when not --mock-all)")
-    ap.add_argument("--max-ticks", type=int, default=200)
+    ap.add_argument("--max-ticks", type=int, default=None)
     ap.add_argument("--instance-id", type=int, default=None,
                     help="public test instance id (TRO state overlay); --env omni only")
     ap.add_argument("--max-episode-steps", type=int, default=None,
-                    help="Simulator step cap (OmniGibson default 5000; RoboCasa default 3000)")
+                    help="Simulator step cap; RoboCasa defaults to twice the registered task horizon")
+    ap.add_argument("--seed", type=int, default=7)
     args = ap.parse_args(argv)
 
     if args.run_dir:
@@ -151,6 +152,7 @@ def main(argv=None, *, default_env="mock", default_policy_servers=None) -> int:
     # AFTER a base `_0_0_template` reset — so the id only goes to reset() below.
     if args.env == "robocasa":
         env_kwargs["task_name"] = args.task
+        env_kwargs["seed"] = args.seed
         if args.max_episode_steps is not None:
             env_kwargs["horizon"] = args.max_episode_steps
         os.environ["MOBIAGENT_SKILLS"] = "close, open, switch, manipulate, navigate, pnp"
@@ -204,6 +206,7 @@ def main(argv=None, *, default_env="mock", default_policy_servers=None) -> int:
         if args.env == "robocasa":
             from mobiagent.environments.robocasa import RoboCasaPolicyRegistry
             registry = RoboCasaPolicyRegistry.from_yaml(Path(args.policy_servers))
+            registry.task_name = args.task
         else:
             registry = PolicyRegistry.from_yaml(Path(args.policy_servers))
         from .judge_vlm import judge as judge_real
@@ -211,6 +214,11 @@ def main(argv=None, *, default_env="mock", default_policy_servers=None) -> int:
 
         def judge_fn(**kwargs):
             return judge_real(**kwargs)
+
+        if args.env == 'robocasa':
+            from mobiagent.environments.robocasa_brain import RoboCasaBrain
+            brain = RoboCasaBrain(env)
+            planner_fn, judge_fn = brain.plan, brain.judge
 
     orch = Orchestrator(
         env=env,
@@ -220,10 +228,15 @@ def main(argv=None, *, default_env="mock", default_policy_servers=None) -> int:
         planner_fn=planner_fn,
         judge_fn=judge_fn,
         run_dir=run_dir,
-        max_ticks=args.max_ticks,
+        max_ticks=(args.max_ticks if args.max_ticks is not None else
+                   env.horizon + 2 if args.env == 'robocasa' else 200),
     )
     print("\n=== orchestrator running ===", flush=True)
     summary = orch.run(initial_obs=obs)
+    if args.env == "robocasa":
+        summary['success'] = bool(env.episode_score())
+        summary['env_steps_used'] = env.steps_used
+        summary['horizon'] = env.horizon
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print("\n=== summary ===")
     print(json.dumps(summary, indent=2))

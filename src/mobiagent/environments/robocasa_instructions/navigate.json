@@ -1,0 +1,19 @@
+{
+  "skill": "navigate",
+  "instructions": {
+    "Navigate to the fridge.": null,
+    "Navigate to the microwave.": null,
+    "Navigate to the sink.": null,
+    "Navigate to the dishwasher.": null,
+    "Navigate to the toaster oven.": null,
+    "Navigate to the toaster.": null,
+    "Navigate to the electric kettle.": null,
+    "Navigate to the range hood.": null,
+    "Navigate to the stove.": null,
+    "Navigate to the stand mixer.": null,
+    "Navigate to the coffee machine.": null,
+    "Navigate to the shelves.": null,
+    "Navigate to the oven.": null,
+    "NavigateKitchen": null
+  }
+}
