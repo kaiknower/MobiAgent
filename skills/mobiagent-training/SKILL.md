@@ -63,9 +63,9 @@ compute environment; do not provision another host or launch additional sweeps.
      mobiagent_behavior --exp-name my_run
    ```
 
-3. The BEHAVIOR configuration freezes its VLM backbone and trains routed experts.
-   This is distinct from RoboCasa's joint-training recipe. Resume the same
-   BEHAVIOR experiment by adding `--resume`.
+3. The BEHAVIOR configuration trains the shared VLM and all six routed experts
+   jointly (`freeze_filter=nnx.Nothing()`). It requires eight GPUs for its batch
+   of 480 with 8-way FSDP. Resume the same BEHAVIOR experiment by adding `--resume`.
 
 ## Training outputs
 

@@ -30,9 +30,12 @@ uv run scripts/serve_policy.py --config mobiagent_behavior \
   --checkpoint /path/to/checkpoint --port 8000
 ```
 
-The BEHAVIOR recipe freezes the shared vision-language backbone and trains routed
-action experts. Batch sizes, schedules and data paths must be configured for the
-target run. Keep expert order and normalization identical in training and serving.
+The BEHAVIOR recipe trains the shared vision-language backbone and all six routed
+action experts jointly (`freeze_filter=nnx.Nothing()`) on eight GPUs with 8-way
+FSDP: a batch of 480 split across experts in proportion to their segment counts,
+50,000 steps, 1,000 warmup steps, a peak learning rate of 1e-4, and one global
+action normalizer. Data paths must be configured for the target run. Keep expert
+order and normalization identical in training and serving.
 
 BEHAVIOR segment intervals are `[start_idx_30hz, end_idx_30hz)`. Short action
 chunks repeat the final frame within their own skill segment; they never extend

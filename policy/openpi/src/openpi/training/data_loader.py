@@ -526,6 +526,10 @@ def create_torch_data_loader(
             )
         else:
             per_expert_arg = data_config.skill_segments_per_expert
+            if per_expert_arg * num_experts != batch_size:
+                raise ValueError(
+                    f"per_expert={per_expert_arg} × {num_experts} experts != batch_size={batch_size}"
+                )
             logging.info(
                 "skill_segments stratified sampler (uniform): per_expert=%d × %d experts = batch %d",
                 per_expert_arg, num_experts, per_expert_arg * num_experts,

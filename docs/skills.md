@@ -34,5 +34,4 @@ Workflow skills organize agent operations across execution and policy evolution.
 The learned action experts (`open`, `close`, `navigate`, and other benchmark-specific
 skills) remain model components selected by the runtime policy router.
 
-RoboCasa training updates both the shared VLM and action experts. The BEHAVIOR
-recipe retains its own backbone-freezing configuration.
+RoboCasa and BEHAVIOR training both update the shared VLM and action experts.

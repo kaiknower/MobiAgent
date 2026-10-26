@@ -16,7 +16,6 @@ import openpi.models.pi0_six_head_config as pi0_six_head_config
 import openpi.models.tokenizer as _tokenizer
 import openpi.policies.behavior_policy as behavior_policy
 import openpi.shared.download as _download
-import openpi.shared.nnx_utils as nnx_utils
 import openpi.shared.normalize as _normalize
 import openpi.training.droid_rlds_dataset as droid_rlds_dataset
 import openpi.training.optimizer as _optimizer
@@ -301,13 +300,6 @@ class TrainConfig:
         if self.resume and self.overwrite:
             raise ValueError('Cannot resume and overwrite at the same time.')
 
-def _six_head_freeze_paligemma_backbone_filter() -> Filter:
-    """Freeze the vision and language backbone for BEHAVIOR expert training.
-
-    Action expert towers, their input/output projections and the subtask head
-    remain trainable."""
-    return nnx.Any(nnx_utils.PathRegex('.*img.*'), nnx.All(nnx_utils.PathRegex('.*llm.*'), nnx.Not(nnx_utils.PathRegex('.*llm.*_[1-6].*'))))
-
 # Portable baseline recipes; dataset and checkpoint locations are user supplied.
 import os
 
@@ -318,20 +310,23 @@ def _skill_recipe(name, heads):
             expert_names=heads, action_dim=32,
             action_horizon=50, max_token_len=200,
             discrete_state_input=True),
-        freeze_filter=_six_head_freeze_paligemma_backbone_filter(),
+        freeze_filter=nnx.Nothing(),
         weight_loader=weight_loaders.Pi05BaseToSixHeadLoader(
             params_path=os.environ.get("MOBIAGENT_BASE_PARAMS", "gs://openpi-assets/checkpoints/pi05_base/params"),
             num_action_experts=len(heads)),
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000, peak_lr=1e-4,
+            decay_steps=50_000, decay_lr=1e-5),
         data=SkillSegmentsDataConfig(
             repo_id=name,
             skill_segments_dir=os.environ.get("MOBIAGENT_SEGMENTS_DIR", "data/segments"),
             num_experts=len(heads), canonical_heads=heads,
-            per_expert=4, per_expert_proportional=False,
-            use_per_expert_norm=True, force_use_quantile_norm=False,
+            per_expert_proportional=True,
+            use_per_expert_norm=False, force_use_quantile_norm=False,
             state_column="observation.state",
             action_column="action",
             skill_prompt_style="skill_only"),
-        batch_size=4*len(heads), num_workers=2, fsdp_devices=1,
+        batch_size=480, num_train_steps=50_000, num_workers=2, fsdp_devices=8,
         wandb_enabled=False,
         assets_base_dir=os.environ.get("MOBIAGENT_ASSETS_DIR", "assets"),
         checkpoint_base_dir=os.environ.get("MOBIAGENT_CHECKPOINT_DIR", "checkpoints"))

@@ -118,8 +118,8 @@ class Pi0SixHeadConfig(pi0_config.Pi0Config):
     def get_freeze_filter(self) -> nnx.filterlib.Filter:
         """Freeze the vision encoder while training the language backbone and experts.
 
-        LoRA variants use the base configuration's adapter filter. RoboCasa joint
-        training overrides this filter with nnx.Nothing() to train the full VLM."""
+        LoRA variants use the base configuration's adapter filter. The RoboCasa and
+        BEHAVIOR recipes override this filter with nnx.Nothing() to train the full VLM."""
         # LoRA case: defer to base filter so LoRA-adapter-only training works.
         if "lora" in self.paligemma_variant or "lora" in self.action_expert_variant:
             return super().get_freeze_filter()
